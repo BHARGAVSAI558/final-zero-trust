@@ -4,22 +4,22 @@
 
 ### Windows (PowerShell - Run as Administrator)
 ```powershell
-irm https://raw.githubusercontent.com/BHARGAVSAI558/zero_trust/main/agent/install_windows.bat | iex
+irm https://raw.githubusercontent.com/BHARGAVSAI558/zero-trust-tool/main/agent/install_windows.bat | iex
 ```
 
 Or download and run:
 ```powershell
-curl -o install.bat https://raw.githubusercontent.com/BHARGAVSAI558/zero_trust/main/agent/install_windows.bat && install.bat
+curl -o install.bat https://raw.githubusercontent.com/BHARGAVSAI558/zero-trust-tool/main/agent/install_windows.bat && install.bat
 ```
 
 ### Linux/Mac (Terminal)
 ```bash
-curl -fsSL https://raw.githubusercontent.com/BHARGAVSAI558/zero_trust/main/agent/install_linux.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/BHARGAVSAI558/zero-trust-tool/main/agent/install_linux.sh | sudo bash
 ```
 
 Or download and run:
 ```bash
-wget https://raw.githubusercontent.com/BHARGAVSAI558/zero_trust/main/agent/install_linux.sh
+wget https://raw.githubusercontent.com/BHARGAVSAI558/zero-trust-tool/main/agent/install_linux.sh
 chmod +x install_linux.sh
 sudo ./install_linux.sh
 ```
@@ -29,12 +29,12 @@ sudo ./install_linux.sh
 ### Step 1: Download Agent
 ```bash
 # Clone repository
-git clone https://github.com/BHARGAVSAI558/zero_trust.git
-cd zero_trust/agent
+git clone https://github.com/BHARGAVSAI558/zero-trust-tool.git
+cd zero-trust-tool/agent
 ```
 
 Or download directly:
-- Windows: https://github.com/BHARGAVSAI558/zero_trust/archive/refs/heads/main.zip
+- Windows: https://github.com/BHARGAVSAI558/zero-trust-tool/archive/refs/heads/main.zip
 - Extract and navigate to `agent` folder
 
 ### Step 2: Install Dependencies

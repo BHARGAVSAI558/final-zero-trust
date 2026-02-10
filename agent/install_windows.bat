@@ -28,8 +28,8 @@ echo.
 
 REM Download agent files from GitHub
 echo [INFO] Downloading agent files...
-curl -L -o "%INSTALL_DIR%\zero_trust_agent.py" https://raw.githubusercontent.com/BHARGAVSAI558/zero_trust/main/agent/zero_trust_agent.py
-curl -L -o "%INSTALL_DIR%\requirements.txt" https://raw.githubusercontent.com/BHARGAVSAI558/zero_trust/main/agent/requirements.txt
+curl -L -o "%INSTALL_DIR%\zero_trust_agent.py" https://raw.githubusercontent.com/BHARGAVSAI558/zero-trust-tool/main/agent/zero_trust_agent.py
+curl -L -o "%INSTALL_DIR%\requirements.txt" https://raw.githubusercontent.com/BHARGAVSAI558/zero-trust-tool/main/agent/requirements.txt
 
 if not exist "%INSTALL_DIR%\zero_trust_agent.py" (
     echo [ERROR] Failed to download agent files
