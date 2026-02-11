@@ -455,9 +455,15 @@ def admin_files():
 @app.get("/audit/chain")
 def audit():
     """Get blockchain audit trail"""
+    blocks_with_hash = []
+    for block in blockchain.chain[-10:]:
+        block_copy = block.copy()
+        block_copy['hash'] = blockchain.hash(block)
+        blocks_with_hash.append(block_copy)
+    
     return {
         "chain_length": len(blockchain.chain),
-        "blocks": blockchain.chain[-10:],  # Last 10 blocks
+        "blocks": blocks_with_hash,
         "is_valid": True
     }
 
