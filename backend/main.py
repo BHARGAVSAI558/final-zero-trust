@@ -450,19 +450,21 @@ def user_view(username: str):
         cursor.execute("SELECT * FROM device_logs WHERE user_id=%s ORDER BY first_seen DESC LIMIT 1", (username,))
         device = cursor.fetchone()
         
+        risk_data = calculate_risk_score(username, db)
+        
         cursor.close()
         db.close()
         
         return {
             "user": username,
-            "risk_score": 15,
-            "risk_level": "LOW",
-            "decision": "ALLOW",
-            "signals": [],
+            "risk_score": risk_data["risk_score"],
+            "risk_level": risk_data["risk_level"],
+            "decision": risk_data["decision"],
+            "signals": risk_data["signals"],
             "total_logins": total,
             "last_login": str(last_login["login_time"]) if last_login else None,
             "accessible_resources": ["dashboard", "profile", "reports", "analytics"],
-            "ip_address": device["ip_address"] if device else "N/A",
+            "ip_address": last_login["ip_address"] if last_login else "N/A",
             "mac_address": device["mac_address"] if device else "N/A",
             "wifi_ssid": device["wifi_ssid"] if device else "N/A",
             "hostname": device["hostname"] if device else "N/A",
@@ -470,7 +472,8 @@ def user_view(username: str):
             "country": last_login["country"] if last_login else "Unknown",
             "city": last_login["city"] if last_login else "Unknown"
         }
-    except:
+    except Exception as e:
+        print(f"User view error: {e}")
         return {
             "user": username,
             "risk_score": 0,
@@ -479,7 +482,14 @@ def user_view(username: str):
             "signals": [],
             "total_logins": 0,
             "last_login": None,
-            "accessible_resources": ["dashboard", "profile"]
+            "accessible_resources": ["dashboard", "profile"],
+            "ip_address": "N/A",
+            "mac_address": "N/A",
+            "wifi_ssid": "N/A",
+            "hostname": "N/A",
+            "os": "N/A",
+            "country": "Unknown",
+            "city": "Unknown"
         }
 
 @app.post("/device/register")
