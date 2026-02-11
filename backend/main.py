@@ -294,21 +294,21 @@ def admin_view():
             risk_data = calculate_risk_score(u["user_id"], db)
             
             result.append({
-                "user": u["user_id"],
+                "user": u["user_id"] or "unknown",
                 "risk_score": risk_data["risk_score"],
                 "risk_level": risk_data["risk_level"],
                 "decision": risk_data["decision"],
                 "access_zone": risk_data["zone"],
-                "total_logins": u["total_logins"],
+                "total_logins": u["total_logins"] or 0,
                 "last_login": str(u["last_login"]) if u["last_login"] else None,
                 "signals": risk_data["signals"],
-                "ip_address": u["ip_address"],
-                "country": u["country"],
-                "city": u["city"],
-                "mac_address": u["mac_address"],
-                "wifi_ssid": u["wifi_ssid"],
-                "hostname": u["hostname"],
-                "os": u["os"]
+                "ip_address": u["ip_address"] or "N/A",
+                "country": u["country"] or "Unknown",
+                "city": u["city"] or "Unknown",
+                "mac_address": u["mac_address"] or "N/A",
+                "wifi_ssid": u["wifi_ssid"] or "N/A",
+                "hostname": u["hostname"] or "N/A",
+                "os": u["os"] or "N/A"
             })
         
         cursor.close()
@@ -316,6 +316,8 @@ def admin_view():
         return result
     except Exception as e:
         print(f"Admin view error: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 @app.get("/security/analyze/user/{username}")
@@ -455,17 +457,17 @@ def admin_files():
 @app.get("/audit/chain")
 def audit():
     """Get blockchain audit trail"""
-    blocks_with_hash = []
-    for block in blockchain.chain[-10:]:
-        block_copy = block.copy()
-        block_copy['hash'] = blockchain.hash(block)
-        blocks_with_hash.append(block_copy)
-    
-    return {
-        "chain_length": len(blockchain.chain),
-        "blocks": blocks_with_hash,
-        "is_valid": True
-    }
+    try:
+        blocks_with_hash = []
+        for block in blockchain.chain[-10:]:
+            block_copy = block.copy()
+            block_copy['hash'] = blockchain.hash(block)
+            blocks_with_hash.append(block_copy)
+        
+        return blocks_with_hash
+    except Exception as e:
+        print(f"Audit chain error: {e}")
+        return []
 
 @app.get("/zones")
 def get_zones():

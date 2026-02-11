@@ -36,7 +36,7 @@ def init_database():
             CREATE TABLE IF NOT EXISTS device_logs (
                 id SERIAL PRIMARY KEY,
                 user_id VARCHAR(50) NOT NULL,
-                device_id VARCHAR(255),
+                device_id VARCHAR(255) UNIQUE,
                 mac_address VARCHAR(17),
                 os VARCHAR(50),
                 trusted BOOLEAN DEFAULT FALSE,
