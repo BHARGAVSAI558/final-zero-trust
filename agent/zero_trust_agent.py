@@ -1,265 +1,155 @@
-#!/usr/bin/env python3
-"""
-Zero Trust Security Agent
-Runs on employee workstations to monitor activity and send telemetry to backend
-"""
-
-import os
 import sys
-import time
-import socket
-import platform
-import uuid
-import hashlib
-import requests
-import json
-from datetime import datetime
-from pathlib import Path
 import psutil
+from psutil import AccessDenied
+import platform
+import socket
+import uuid
+import requests
+import time
+import os
+from datetime import datetime
 
 # Configuration
-BACKEND_URL = "https://zero-trust-3fmw.onrender.com"
-USERNAME = None  # Set via command line
-CHECK_INTERVAL = 300  # 5 minutes
-SENSITIVE_PATHS = [
-    "Documents", "Desktop", "Downloads", 
-    "confidential", "secret", "private", "payroll", "hr"
-]
+BACKEND_URL = "http://localhost:8000"
+USERNAME = sys.argv[1] if len(sys.argv) > 1 else input("Enter your username: ")
+INTERVAL = 60  # Send data every 60 seconds
 
-class ZeroTrustAgent:
-    def __init__(self, username):
-        self.username = username
-        self.device_id = self.get_device_id()
-        self.last_login_time = datetime.now()
-        self.file_access_cache = set()
-        
-    def get_device_id(self):
-        """Generate unique device fingerprint"""
-        mac = ':'.join(['{:02x}'.format((uuid.getnode() >> i) & 0xff) for i in range(0,8*6,8)][::-1])
-        hostname = socket.gethostname()
-        return hashlib.sha256(f"{mac}-{hostname}".encode()).hexdigest()[:16]
+def get_mac_address():
+    """Get real MAC address"""
+    mac = ':'.join(['{:02x}'.format((uuid.getnode() >> elements) & 0xff) for elements in range(0,2*6,2)][::-1])
+    return mac
+
+def get_wifi_ssid():
+    """Get WiFi SSID (Windows)"""
+    try:
+        import subprocess
+        result = subprocess.check_output(['netsh', 'wlan', 'show', 'interfaces'], encoding='utf-8')
+        for line in result.split('\n'):
+            if 'SSID' in line and 'BSSID' not in line:
+                return line.split(':')[1].strip()
+    except:
+        pass
+    return "Unknown"
+
+def get_device_info():
+    """Collect device fingerprint"""
+    hostname = socket.gethostname()
+    ip = socket.gethostbyname(hostname)
     
-    def get_device_info(self):
-        """Collect device information"""
-        try:
-            mac = ':'.join(['{:02x}'.format((uuid.getnode() >> i) & 0xff) for i in range(0,8*6,8)][::-1])
-            hostname = socket.gethostname()
-            os_info = f"{platform.system()} {platform.release()}"
-            ip = socket.gethostbyname(hostname)
-            
-            # Get WiFi SSID (Windows)
-            wifi_ssid = "Unknown"
-            if platform.system() == "Windows":
-                try:
-                    import subprocess
-                    result = subprocess.check_output(['netsh', 'wlan', 'show', 'interfaces'], encoding='utf-8')
-                    for line in result.split('\n'):
-                        if 'SSID' in line and 'BSSID' not in line:
-                            wifi_ssid = line.split(':')[1].strip()
-                            break
-                except:
-                    pass
-            
-            return {
-                "username": self.username,
-                "device_id": self.device_id,
-                "mac_address": mac,
-                "hostname": hostname,
-                "os": os_info,
-                "wifi_ssid": wifi_ssid,
-                "ip_address": ip
-            }
-        except Exception as e:
-            print(f"[ERROR] Failed to get device info: {e}")
-            return None
+    return {
+        "device_id": str(uuid.getnode()),
+        "mac": get_mac_address(),
+        "os": f"{platform.system()} {platform.release()}",
+        "hostname": hostname,
+        "ip": ip,
+        "wifi": get_wifi_ssid()
+    }
+
+def monitor_file_access():
+    """Monitor recent file access"""
+    files = []
+    sensitive_paths = [
+        os.path.expanduser("~/Documents"),
+        os.path.expanduser("~/Downloads"),
+        "C:\\Windows\\System32"
+    ]
     
-    def register_device(self):
-        """Register device with backend"""
-        device_info = self.get_device_info()
-        if not device_info:
-            return False
-        
-        try:
-            response = requests.post(
-                f"{BACKEND_URL}/device/register",
-                json=device_info,
-                timeout=10
-            )
-            if response.status_code == 200:
-                print(f"[OK] Device registered: {device_info['hostname']}")
-                return True
-            else:
-                print(f"[WARN] Device registration failed: {response.status_code}")
-                return False
-        except Exception as e:
-            print(f"[ERROR] Cannot connect to backend: {e}")
-            return False
-    
-    def monitor_file_access(self):
-        """Monitor file system access"""
-        suspicious_files = []
-        
-        try:
-            # Monitor recent file operations
-            for proc in psutil.process_iter(['pid', 'name', 'open_files']):
-                try:
-                    if proc.info['open_files']:
-                        for file in proc.info['open_files']:
-                            file_path = file.path.lower()
-                            
-                            # Check if accessing sensitive paths
-                            if any(sensitive in file_path for sensitive in SENSITIVE_PATHS):
-                                file_key = f"{file.path}-{datetime.now().strftime('%Y%m%d%H')}"
-                                if file_key not in self.file_access_cache:
-                                    suspicious_files.append({
-                                        "file_name": file.path,
-                                        "action": "READ",
-                                        "process": proc.info['name']
-                                    })
-                                    self.file_access_cache.add(file_key)
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    continue
-        except Exception as e:
-            print(f"[ERROR] File monitoring failed: {e}")
-        
-        return suspicious_files
-    
-    def check_login_anomalies(self):
-        """Detect login anomalies"""
-        anomalies = []
-        current_hour = datetime.now().hour
-        
-        # Check odd hours (outside 8 AM - 6 PM)
-        if current_hour < 8 or current_hour > 18:
-            anomalies.append("ODD_HOUR_LOGIN")
-        
-        # Check if weekend
-        if datetime.now().weekday() >= 5:
-            anomalies.append("WEEKEND_LOGIN")
-        
-        return anomalies
-    
-    def check_network_anomalies(self):
-        """Detect network anomalies"""
-        anomalies = []
-        
-        try:
-            # Check for external connections
-            connections = psutil.net_connections(kind='inet')
-            external_ips = set()
-            
-            for conn in connections:
-                if conn.raddr and conn.status == 'ESTABLISHED':
-                    remote_ip = conn.raddr.ip
-                    # Check if external (not private IP)
-                    if not (remote_ip.startswith('10.') or 
-                           remote_ip.startswith('192.168.') or 
-                           remote_ip.startswith('172.')):
-                        external_ips.add(remote_ip)
-            
-            if len(external_ips) > 10:
-                anomalies.append("EXCESSIVE_EXTERNAL_CONNECTIONS")
-        except Exception as e:
-            print(f"[ERROR] Network check failed: {e}")
-        
-        return anomalies
-    
-    def check_usb_devices(self):
-        """Monitor USB device connections"""
-        anomalies = []
-        
-        try:
-            # Check for removable drives
-            partitions = psutil.disk_partitions()
-            for partition in partitions:
-                if 'removable' in partition.opts.lower():
-                    anomalies.append("USB_DEVICE_CONNECTED")
-                    break
-        except Exception as e:
-            print(f"[ERROR] USB check failed: {e}")
-        
-        return anomalies
-    
-    def send_telemetry(self, files, anomalies):
-        """Send collected data to backend"""
-        try:
-            # Send file access logs
-            for file_data in files:
-                requests.post(
-                    f"{BACKEND_URL}/files/access",
-                    json={
-                        "user_id": self.username,
-                        "file_name": file_data["file_name"],
-                        "action": file_data["action"]
-                    },
-                    timeout=5
-                )
-            
-            if files:
-                print(f"[OK] Sent {len(files)} file access logs")
-            
-            if anomalies:
-                print(f"[ALERT] Detected anomalies: {', '.join(anomalies)}")
-        
-        except Exception as e:
-            print(f"[ERROR] Failed to send telemetry: {e}")
-    
-    def run(self):
-        """Main monitoring loop"""
-        print(f"=" * 60)
-        print(f"Zero Trust Security Agent v1.0")
-        print(f"=" * 60)
-        print(f"User: {self.username}")
-        print(f"Device ID: {self.device_id}")
-        print(f"Backend: {BACKEND_URL}")
-        print(f"Check Interval: {CHECK_INTERVAL}s")
-        print(f"=" * 60)
-        
-        # Register device
-        if not self.register_device():
-            print("[WARN] Running in offline mode")
-        
-        print(f"\n[OK] Agent started. Monitoring activity...\n")
-        
-        cycle = 0
-        while True:
+    for path in sensitive_paths:
+        if os.path.exists(path):
             try:
-                cycle += 1
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] Cycle #{cycle}")
-                
-                # Collect data
-                files = self.monitor_file_access()
-                login_anomalies = self.check_login_anomalies()
-                network_anomalies = self.check_network_anomalies()
-                usb_anomalies = self.check_usb_devices()
-                
-                all_anomalies = login_anomalies + network_anomalies + usb_anomalies
-                
-                # Send to backend
-                if files or all_anomalies:
-                    self.send_telemetry(files, all_anomalies)
-                else:
-                    print("  No suspicious activity detected")
-                
-                # Wait for next cycle
-                time.sleep(CHECK_INTERVAL)
-                
-            except KeyboardInterrupt:
-                print("\n[OK] Agent stopped by user")
-                break
-            except Exception as e:
-                print(f"[ERROR] Monitoring error: {e}")
-                time.sleep(60)
-
-def main():
-    if len(sys.argv) < 2:
-        print("Usage: python zero_trust_agent.py <username>")
-        print("Example: python zero_trust_agent.py bhargav")
-        sys.exit(1)
+                for root, dirs, filenames in os.walk(path):
+                    for filename in filenames[:5]:  # Limit to 5 files per folder
+                        filepath = os.path.join(root, filename)
+                        try:
+                            stat = os.stat(filepath)
+                            files.append({
+                                "name": filename,
+                                "path": filepath,
+                                "action": "read",
+                                "size": stat.st_size,
+                                "sensitivity": "sensitive" if "System32" in filepath else "internal"
+                            })
+                        except:
+                            pass
+                    break  # Only check top level
+            except:
+                pass
     
-    username = sys.argv[1]
-    agent = ZeroTrustAgent(username)
-    agent.run()
+    return files[:10]  # Return max 10 files
+
+def monitor_network():
+    """Monitor network connections (works without admin)"""
+    connections = []
+    try:
+        # Try psutil first (requires admin on Windows)
+        for conn in psutil.net_connections(kind='inet')[:10]:
+            if conn.raddr:
+                connections.append({
+                    "type": "TCP" if conn.type == 1 else "UDP",
+                    "ip": conn.raddr.ip,
+                    "port": conn.raddr.port,
+                    "protocol": "TCP" if conn.type == 1 else "UDP",
+                    "external": not conn.raddr.ip.startswith(('192.168', '10.', '127.'))
+                })
+    except (PermissionError, AccessDenied):
+        # Fallback: Use netstat (no admin needed)
+        try:
+            import subprocess
+            result = subprocess.check_output(['netstat', '-n'], encoding='utf-8', errors='ignore')
+            for line in result.split('\n'):
+                if 'ESTABLISHED' in line:
+                    parts = line.split()
+                    if len(parts) >= 3:
+                        remote = parts[2]
+                        if ':' in remote:
+                            ip, port = remote.rsplit(':', 1)
+                            connections.append({
+                                "type": "TCP",
+                                "ip": ip,
+                                "port": int(port),
+                                "protocol": "TCP",
+                                "external": not ip.startswith(('192.168', '10.', '127.'))
+                            })
+                            if len(connections) >= 10:
+                                break
+        except:
+            pass
+    except Exception:
+        pass
+    
+    return connections
+
+def send_telemetry():
+    """Send telemetry to backend"""
+    try:
+        data = {
+            "username": USERNAME,
+            "device": get_device_info(),
+            "files": monitor_file_access(),
+            "network": monitor_network()
+        }
+        
+        response = requests.post(f"{BACKEND_URL}/agent/telemetry", json=data, timeout=5)
+        if response.status_code == 200:
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] OK Telemetry sent successfully")
+        else:
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] FAIL: {response.status_code}")
+    except Exception as e:
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: {str(e)}")
 
 if __name__ == "__main__":
-    main()
+    print("=" * 60)
+    print("ZERO TRUST AGENT - DEVICE MONITORING")
+    print("=" * 60)
+    print(f"User: {USERNAME}")
+    print(f"Backend: {BACKEND_URL}")
+    print(f"Interval: {INTERVAL}s")
+    print(f"MAC: {get_mac_address()}")
+    print(f"WiFi: {get_wifi_ssid()}")
+    print(f"Hostname: {socket.gethostname()}")
+    print("=" * 60)
+    print("Agent started. Press Ctrl+C to stop.\n")
+    
+    while True:
+        send_telemetry()
+        time.sleep(INTERVAL)

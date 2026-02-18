@@ -1,114 +1,121 @@
-# 🚀 QUICK START - LOCAL SETUP
+# 🚀 QUICK START GUIDE
 
-## Prerequisites
-✅ MySQL installed (root password: root123)
-✅ Python 3.7+ installed
-✅ Node.js installed
+## Option 1: Double-Click to Start (EASIEST)
 
-## Setup Steps (5 minutes)
+### Start System:
+```
+Double-click: START.bat
+```
+This will:
+- Start backend on http://localhost:8000
+- Start frontend on http://localhost:3000
+- Open browser automatically
 
-### 1. Setup MySQL Database
-Open MySQL Workbench or Command Line and run:
+### Start Agent:
+```
+Double-click: START_AGENT.bat bhargav
+```
+Or edit the file to change username.
+
+## Option 2: Manual Start
+
+### Terminal 1 - Backend:
 ```bash
-mysql -u root -p
-# Enter password: root123
+cd backend
+python main_advanced.py
 ```
 
-Then copy-paste entire content from: `setup_mysql.sql`
-
-### 2. Start Backend
+### Terminal 2 - Frontend:
 ```bash
-cd e:\zero-trust-tool\backend
-python main_local.py
-```
-
-You should see:
-```
-🛡️ Zero Trust System - LOCAL MODE
-Backend running on: http://localhost:8000
-API Docs: http://localhost:8000/docs
-```
-
-### 3. Start Frontend
-Open NEW terminal:
-```bash
-cd e:\zero-trust-tool\frontend
+cd frontend
 npm start
 ```
 
-Browser will open: http://localhost:3000
+### Terminal 3 - Agent (Optional):
+```bash
+cd agent
+python zero_trust_agent.py
+# Enter username when prompted
+```
 
-### 4. Login & Test
+## Access URLs
+
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:8000
+- **API Docs**: http://localhost:8000/docs
+
+## Login Credentials
+
+### Admin:
 - Username: `admin`
 - Password: `admin123`
 
-## ✅ Verify Everything Works
+### Users:
+- bhargav / bhargav123
+- mahesh / mahesh123
+- sai / sai123
+- karthik / karthik123
 
-1. **Login** - Should see admin dashboard
-2. **Register** - Click "New User? Register Here"
-3. **Approve** - See pending user in yellow box
-4. **File Access** - Click READ/WRITE/DELETE buttons
-5. **Risk Score** - Should update in real-time
-6. **Blockchain** - Should show blocks after 3+ logins
+## Troubleshooting
 
-## 🎯 For Review Tomorrow
+### Frontend not opening?
+1. Check if port 3000 is free
+2. Run: `cd frontend && npm start`
+3. Browser should open automatically
+4. If not, manually go to http://localhost:3000
 
-**Show these features:**
-1. Admin dashboard with real-time monitoring
-2. User registration & approval workflow
-3. UEBA risk scoring (0-100)
-4. Micro-segmentation (4 zones)
-5. File access logging
-6. Blockchain audit trail
-7. Revoke access functionality
+### Backend not connecting?
+1. Check if port 8000 is free
+2. Verify MySQL is running
+3. Check database credentials in main_advanced.py
 
-## 📊 Test Data
+### Agent not updating?
+1. Verify backend is running on port 8000
+2. Check agent URL is http://localhost:8000
+3. Run agent with correct username
 
-**Default Users:**
-- admin / admin123 (Admin role)
-- bhargav / admin123 (User role)
+## File Structure
 
-**Register New User:**
-- Username: testuser
-- Password: test123
-- Status: Pending (needs admin approval)
+```
+zero-trust-tool/
+├── START.bat              ← Double-click to start system
+├── START_AGENT.bat        ← Double-click to start agent
+├── backend/
+│   └── main_advanced.py   ← Backend server
+├── frontend/
+│   └── src/               ← React app
+└── agent/
+    └── zero_trust_agent.py ← Monitoring agent
+```
 
-## 🐛 Troubleshooting
+## Quick Commands
 
-**Backend won't start:**
-- Check MySQL is running
-- Verify database `zero_trust` exists
-- Check port 8000 is free
+```bash
+# Start everything
+START.bat
 
-**Frontend won't start:**
-- Run: `npm install`
-- Check port 3000 is free
+# Start agent for user "bhargav"
+START_AGENT.bat bhargav
 
-**Can't login:**
-- Check backend is running
-- Open http://localhost:8000/health
-- Should see: {"status":"healthy"}
+# Or manually
+cd agent
+python zero_trust_agent.py
+# Type: bhargav
+```
 
-**No data showing:**
-- Check browser console (F12)
-- Verify API calls going to localhost:8000
-- Check MySQL has data: `SELECT * FROM users;`
+## What to Expect
 
-## 🎤 Presentation Tips
+1. **Backend starts**: Shows "Zero Trust System - JWT + 5min Sessions"
+2. **Frontend starts**: Browser opens to http://localhost:3000
+3. **Login page**: Black screen with green matrix grid
+4. **Agent starts**: Shows device info and sends telemetry every 60s
 
-1. **Start with problem** - Traditional security fails
-2. **Show solution** - Zero Trust continuous verification
-3. **Live demo** - All features working
-4. **Compare** - Better than Microsoft ATP for SMBs
-5. **Conclude** - Enterprise-ready prototype
+## Demo Flow
 
-## ✅ ALL REQUIREMENTS MET
-
-✅ Input: Login records, file logs, device fingerprints
-✅ Output: Risk score (0-100), Access decision (ALLOW/DENY)
-✅ UEBA: 13+ behavioral signals
-✅ Micro-segmentation: 4 security zones
-✅ Dashboard: Real-time suspicious activities
-✅ Comparison: vs Microsoft ATP
-
-**YOU'RE READY FOR REVIEW! 🚀**
+1. Start system: `START.bat`
+2. Login as admin: admin/admin123
+3. See all users in dashboard
+4. Start agent: `START_AGENT.bat bhargav`
+5. Login as bhargav in another browser
+6. Admin clicks "MORE DETAILS" on bhargav
+7. See complete session history with device fingerprints!

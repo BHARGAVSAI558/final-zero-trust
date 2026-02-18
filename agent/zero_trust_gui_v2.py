@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Zero Trust Security Agent - Enhanced GUI
 Advanced security monitoring tool with modern interface
@@ -17,7 +16,7 @@ from datetime import datetime
 import time
 import webbrowser
 
-BACKEND_URL = "https://zero-trust-3fmw.onrender.com"
+BACKEND_URL = "http://localhost:8000"
 CHECK_INTERVAL = 60  # 1 minute for demo
 
 class ModernButton(tk.Button):
@@ -245,7 +244,7 @@ class ZeroTrustGUI:
         self.log("⛔ Monitoring stopped by user", 'warning')
     
     def open_dashboard(self):
-        webbrowser.open('https://zer0-trust.netlify.app')
+        webbrowser.open('http://localhost:3000')
         self.log("🌐 Opening web dashboard...", 'info')
     
     def manual_scan(self):
