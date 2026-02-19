@@ -1,6 +1,6 @@
 """
-Zero Trust Security Agent - Enhanced GUI
-Advanced security monitoring tool with modern interface
+Zero Trust Security Agent - Advanced GUI v3.0
+Enterprise-grade security monitoring with modern interface
 """
 
 import tkinter as tk
@@ -15,6 +15,7 @@ import psutil
 from datetime import datetime
 import time
 import webbrowser
+from collections import deque
 
 BACKEND_URL = "http://localhost:8000"
 CHECK_INTERVAL = 60  # 1 minute for demo
@@ -27,75 +28,117 @@ class ModernButton(tk.Button):
 class ZeroTrustGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("Zero Trust Security Monitor")
-        self.root.geometry("1000x700")
+        self.root.title("Zero Trust Security Agent - Enterprise Edition")
+        self.root.geometry("1400x850")
         self.root.configure(bg='#0a0e27')
+        self.root.resizable(True, True)
         
         self.username = None
         self.monitoring = False
         self.threat_count = 0
         self.scan_count = 0
         self.risk_score = 0
+        self.cpu_history = deque([0]*20, maxlen=20)
+        self.mem_history = deque([0]*20, maxlen=20)
+        self.net_history = deque([0]*20, maxlen=20)
+        
+        # Animation state
+        self.pulse_state = 0
+        self.pulse_direction = 1
         
         self.create_modern_ui()
+        self.start_animations()
         
     def create_modern_ui(self):
-        # Top Bar
-        top_bar = tk.Frame(self.root, bg='#1a1f3a', height=70)
-        top_bar.pack(fill='x')
-        top_bar.pack_propagate(False)
+        # ===== HEADER BAR =====
+        header = tk.Frame(self.root, bg='#0d1117', height=80)
+        header.pack(fill='x')
+        header.pack_propagate(False)
         
-        # Logo and Title
-        title_frame = tk.Frame(top_bar, bg='#1a1f3a')
-        title_frame.pack(side='left', padx=20, pady=15)
+        # Logo Section with Shield
+        logo_frame = tk.Frame(header, bg='#0d1117')
+        logo_frame.pack(side='left', padx=30, pady=15)
         
-        tk.Label(title_frame, text="🛡️", font=('Arial', 30), bg='#1a1f3a', fg='#00d4ff').pack(side='left')
-        tk.Label(title_frame, text="ZERO TRUST", font=('Arial', 18, 'bold'), 
-                bg='#1a1f3a', fg='#ffffff').pack(side='left', padx=10)
-        tk.Label(title_frame, text="Security Monitor", font=('Arial', 10), 
-                bg='#1a1f3a', fg='#00d4ff').pack(side='left')
+        # Animated Shield Icon
+        self.shield_canvas = tk.Canvas(logo_frame, width=50, height=50, bg='#0d1117', 
+                                      highlightthickness=0)
+        self.shield_canvas.pack(side='left')
+        self.draw_shield()
         
-        # Status Indicator
-        self.status_frame = tk.Frame(top_bar, bg='#1a1f3a')
-        self.status_frame.pack(side='right', padx=20)
+        # Title with modern styling
+        title_container = tk.Frame(logo_frame, bg='#0d1117')
+        title_container.pack(side='left', padx=15)
         
-        self.status_dot = tk.Label(self.status_frame, text="●", font=('Arial', 20), 
-                                   bg='#1a1f3a', fg='#ff4444')
-        self.status_dot.pack(side='left')
-        self.status_text = tk.Label(self.status_frame, text="OFFLINE", font=('Arial', 12, 'bold'),
-                                    bg='#1a1f3a', fg='#ff4444')
-        self.status_text.pack(side='left', padx=5)
+        tk.Label(title_container, text="ZERO TRUST", 
+                font=('Segoe UI', 22, 'bold'), bg='#0d1117', 
+                fg='#58a6ff').pack(anchor='w')
+        tk.Label(title_container, text="Enterprise Security Agent v3.0", 
+                font=('Segoe UI', 9), bg='#0d1117', 
+                fg='#8b949e').pack(anchor='w')
+        
+        # Animated Status Indicator
+        status_frame = tk.Frame(header, bg='#0d1117')
+        status_frame.pack(side='right', padx=30)
+        
+        self.status_canvas = tk.Canvas(status_frame, width=120, height=50, 
+                                      bg='#0d1117', highlightthickness=0)
+        self.status_canvas.pack()
+        self.status_text = "OFFLINE"
+        self.status_color = '#f85149'
         
         # Main Container
         main = tk.Frame(self.root, bg='#0a0e27')
         main.pack(fill='both', expand=True, padx=20, pady=20)
         
-        # Login Screen
+        # ===== LOGIN SCREEN =====
         self.login_frame = tk.Frame(main, bg='#0a0e27')
         self.login_frame.pack(expand=True)
         
-        login_box = tk.Frame(self.login_frame, bg='#1a1f3a', relief='flat', bd=0)
-        login_box.pack(pady=50)
+        login_container = tk.Frame(self.login_frame, bg='#161b22', relief='flat')
+        login_container.pack(pady=80)
         
-        tk.Label(login_box, text="🔐 SECURE LOGIN", font=('Arial', 24, 'bold'),
-                bg='#1a1f3a', fg='#00d4ff').pack(pady=30, padx=50)
+        # Login header with icon
+        login_header = tk.Frame(login_container, bg='#161b22')
+        login_header.pack(pady=40, padx=60)
         
-        tk.Label(login_box, text="Enter Username", font=('Arial', 11),
-                bg='#1a1f3a', fg='#ffffff').pack(pady=(20,5))
+        tk.Label(login_header, text="🔐", font=('Arial', 48), 
+                bg='#161b22').pack()
+        tk.Label(login_header, text="SECURE AUTHENTICATION", 
+                font=('Segoe UI', 20, 'bold'), bg='#161b22', 
+                fg='#58a6ff').pack(pady=10)
+        tk.Label(login_header, text="Enter your credentials to begin monitoring", 
+                font=('Segoe UI', 10), bg='#161b22', 
+                fg='#8b949e').pack()
         
-        self.username_entry = tk.Entry(login_box, font=('Arial', 14), width=25,
-                                      bg='#0a0e27', fg='#ffffff', 
-                                      insertbackground='#00d4ff', relief='flat', bd=5)
-        self.username_entry.pack(pady=5, ipady=8)
+        # Username input with modern styling
+        input_frame = tk.Frame(login_container, bg='#161b22')
+        input_frame.pack(pady=30, padx=60)
+        
+        tk.Label(input_frame, text="USERNAME", font=('Segoe UI', 9, 'bold'),
+                bg='#161b22', fg='#8b949e').pack(anchor='w', pady=(0,8))
+        
+        entry_container = tk.Frame(input_frame, bg='#0d1117', relief='flat')
+        entry_container.pack(fill='x', ipady=2)
+        
+        self.username_entry = tk.Entry(entry_container, font=('Segoe UI', 13), 
+                                      bg='#0d1117', fg='#c9d1d9', 
+                                      insertbackground='#58a6ff', relief='flat', 
+                                      bd=0, width=30)
+        self.username_entry.pack(padx=15, pady=12)
         self.username_entry.bind('<Return>', lambda e: self.start_monitoring())
         
-        self.start_btn = ModernButton(login_box, text="START MONITORING",
-                                      command=self.start_monitoring,
-                                      font=('Arial', 12, 'bold'),
-                                      bg='#00d4ff', fg='#000000',
-                                      activebackground='#00a8cc',
-                                      width=20, height=2)
-        self.start_btn.pack(pady=30)
+        # Modern button
+        btn_frame = tk.Frame(login_container, bg='#161b22')
+        btn_frame.pack(pady=30, padx=60)
+        
+        self.start_btn = tk.Button(btn_frame, text="START MONITORING →",
+                                   command=self.start_monitoring,
+                                   font=('Segoe UI', 12, 'bold'),
+                                   bg='#238636', fg='#ffffff',
+                                   activebackground='#2ea043',
+                                   relief='flat', cursor='hand2',
+                                   padx=40, pady=15)
+        self.start_btn.pack()
         
         # Dashboard Screen
         self.dashboard_frame = tk.Frame(main, bg='#0a0e27')
@@ -189,6 +232,44 @@ class ZeroTrustGUI:
         tk.Frame(card, bg='#00d4ff', height=2).pack(fill='x', padx=15)
         return card
     
+    def draw_shield(self):
+        """Draw animated shield icon"""
+        self.shield_canvas.delete('all')
+        points = [25, 5, 45, 15, 45, 35, 25, 45, 5, 35, 5, 15]
+        self.shield_canvas.create_polygon(points, fill='#238636', outline='#3fb950', width=2)
+        self.shield_canvas.create_line(15, 25, 22, 32, width=3, fill='#ffffff', capstyle='round')
+        self.shield_canvas.create_line(22, 32, 35, 18, width=3, fill='#ffffff', capstyle='round')
+    
+    def draw_status_indicator(self):
+        """Draw pulsing status indicator"""
+        self.status_canvas.delete('all')
+        x, y = 20, 25
+        radius = 8 + self.pulse_state
+        self.status_canvas.create_oval(x-radius, y-radius, x+radius, y+radius,
+                                      fill=self.status_color, outline='')
+        self.status_canvas.create_text(50, 25, text=self.status_text,
+                                      font=('Segoe UI', 11, 'bold'),
+                                      fill=self.status_color, anchor='w')
+    
+    def start_animations(self):
+        """Start background animations"""
+        def animate():
+            while True:
+                self.pulse_state += self.pulse_direction * 0.5
+                if self.pulse_state >= 3:
+                    self.pulse_direction = -1
+                elif self.pulse_state <= 0:
+                    self.pulse_direction = 1
+                
+                try:
+                    self.draw_status_indicator()
+                except:
+                    pass
+                
+                time.sleep(0.05)
+        
+        threading.Thread(target=animate, daemon=True).start()
+    
     def create_stat_card(self, parent, label, value, color, col):
         card = tk.Frame(parent, bg='#1a1f3a', relief='flat', bd=0)
         card.grid(row=0, column=col, padx=5, sticky='ew')
@@ -227,11 +308,11 @@ class ZeroTrustGUI:
         self.login_frame.pack_forget()
         self.dashboard_frame.pack(fill='both', expand=True)
         
-        self.status_dot.config(fg='#00ff88')
-        self.status_text.config(text='ONLINE', fg='#00ff88')
+        self.status_text = "ONLINE"
+        self.status_color = '#3fb950'
         
         self.update_device_info()
-        self.log("🚀 Zero Trust Agent initialized", 'success')
+        self.log("🚀 Zero Trust Agent v3.0 initialized", 'success')
         self.log(f"👤 User: {username}", 'info')
         
         self.monitoring = True
@@ -239,8 +320,8 @@ class ZeroTrustGUI:
     
     def stop_monitoring(self):
         self.monitoring = False
-        self.status_dot.config(fg='#ff4444')
-        self.status_text.config(text='OFFLINE', fg='#ff4444')
+        self.status_text = "OFFLINE"
+        self.status_color = '#f85149'
         self.log("⛔ Monitoring stopped by user", 'warning')
     
     def open_dashboard(self):

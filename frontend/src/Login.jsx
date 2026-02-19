@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import Logo from "./components/Logo";
 
-function Login() {
+function Login({ setIsAuthenticated }) {
   const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -11,51 +12,27 @@ function Login() {
     e.preventDefault();
     setError("");
 
-    // Check location permission first
-    if (!navigator.geolocation) {
-      setError("GEOLOCATION NOT SUPPORTED - ACCESS DENIED");
-      return;
-    }
+    try {
+      const formData = new FormData();
+      formData.append('username', username);
+      formData.append('password', password);
 
-    // Request location permission
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        // Location allowed, proceed with login
-        const formData = new FormData();
-        formData.append('username', username);
-        formData.append('password', password);
+      const res = await fetch(`http://localhost:8000/auth/login`, { method: "POST", body: formData });
+      const data = await res.json();
 
-        const res = await fetch(
-          `http://localhost:8000/auth/login`,
-          { method: "POST", body: formData }
-        );
-
-        const data = await res.json();
-        console.log("Login response:", data);
-
-        if (data.status !== "SUCCESS") {
-          setError("ACCESS DENIED - INVALID CREDENTIALS");
-          console.log("Login failed:", data);
-          return;
-        }
-
-        localStorage.setItem("user", data.user);
-        localStorage.setItem("username", data.user);
-        localStorage.setItem("role", data.role);
-        if (data.location) {
-          localStorage.setItem("location", data.location);
-        }
-
-        console.log("Login success, redirecting...");
-        localStorage.setItem("forceRefresh", Date.now().toString());
-        window.location.href = data.role === "admin" ? "/admin" : "/user";
-      },
-      (error) => {
-        // Location denied
-        setError("LOCATION ACCESS REQUIRED - ENABLE GPS TO LOGIN");
-        console.log("Location denied:", error);
+      if (data.status !== "SUCCESS") {
+        setError("ACCESS DENIED - INVALID CREDENTIALS");
+        return;
       }
-    );
+
+      localStorage.setItem("user", data.user);
+      localStorage.setItem("username", data.user);
+      localStorage.setItem("role", data.role);
+      setIsAuthenticated(true);
+      navigate("/dashboard");
+    } catch (err) {
+      setError("CONNECTION ERROR - CHECK BACKEND");
+    }
   };
 
   return (
@@ -77,10 +54,9 @@ function Login() {
       >
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="text-5xl mb-4 animate-pulse">🛡️</div>
-          <h1 className="text-3xl text-green-400 font-bold mb-2 font-mono tracking-wider">
-            ZERO TRUST
-          </h1>
+          <div className="flex justify-center mb-4">
+            <Logo size="lg" />
+          </div>
           <p className="text-green-600 text-sm font-mono border-t border-b border-green-900 py-2 mt-2">
             [ INSIDER THREAT MONITORING SYSTEM ]
           </p>
