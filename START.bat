@@ -1,25 +1,22 @@
 @echo off
+title Zero Trust Platform
+color 0A
 echo ========================================
-echo ZERO TRUST SYSTEM - STARTUP
+echo    ZERO TRUST SECURITY PLATFORM
 echo ========================================
 echo.
+echo Starting all services...
+echo.
 
-echo [1/2] Starting Backend Server...
-start "Backend" cmd /k "cd backend && python main_advanced.py"
-timeout /t 5 /nobreak >nul
+start "Backend" cmd /k "cd backend && uvicorn main:app --reload"
+timeout /t 3 /nobreak >nul
 
-echo [2/2] Starting Frontend...
-cd frontend
-start "" http://localhost:3000
-start "Frontend" cmd /k "npm start"
+start "Frontend" cmd /k "cd frontend && npm start"
+timeout /t 3 /nobreak >nul
 
 echo.
-echo ========================================
-echo SYSTEM STARTED!
-echo ========================================
-echo Backend: http://localhost:8000
+echo All services started!
+echo Backend:  http://localhost:8000
 echo Frontend: http://localhost:3000
 echo.
-echo Browser will open automatically...
-echo Press any key to close this window...
-pause >nul
+pause

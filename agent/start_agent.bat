@@ -1,8 +1,10 @@
 @echo off
+title Zero Trust Agent
+color 0A
 echo ========================================
-echo ZERO TRUST AGENT - GUI VERSION
+echo    ZERO TRUST MONITORING AGENT
 echo ========================================
 echo.
-cd agent
-python zero_trust_gui_v2.py
+cd /d "%~dp0"
+python unified_soc_agent.py
 pause
