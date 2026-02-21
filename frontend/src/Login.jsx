@@ -128,37 +128,15 @@ function Login({ setIsAuthenticated }) {
       localStorage.setItem("isAuthenticated", "true");
       setIsAuthenticated(true);
       
-      // Send device fingerprint to backend
+      // Notify agent immediately after successful login
       try {
-        const deviceData = {
-          username: data.user,
-          device_id: `${navigator.userAgent}-${navigator.platform}`,
-          mac: 'Browser-Based',
-          os: `${navigator.platform} (${navigator.userAgent.match(/\(([^)]+)\)/)?.[1] || 'Unknown'})`,
-          wifi_ssid: 'N/A',
-          hostname: 'Web-Client',
-          ip: '127.0.0.1'
-        };
-        await fetch('http://localhost:8000/device/register', {
+        await fetch('http://localhost:8888/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(deviceData)
+          body: JSON.stringify({ username: data.user })
         });
-        console.log('Device registered:', deviceData);
       } catch (err) {
-        console.log('Device registration failed:', err);
-      }
-      
-      // Trigger agent to capture real device data
-      try {
-        await fetch('http://localhost:9999', {
-          method: 'POST',
-          body: `LOGIN:${data.user}`,
-          mode: 'no-cors'
-        });
-        console.log('Agent triggered for real device capture');
-      } catch (err) {
-        console.log('Agent not running - using browser fingerprint only');
+        console.log('Agent notification skipped');
       }
       
       console.log("Redirecting to dashboard...");

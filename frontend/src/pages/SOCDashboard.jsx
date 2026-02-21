@@ -404,6 +404,7 @@ export default function SOCDashboard() {
                           <th className="p-3 text-left text-purple-400 font-bold">Location</th>
                           <th className="p-3 text-left text-purple-400 font-bold">MAC Address</th>
                           <th className="p-3 text-left text-purple-400 font-bold">Hostname</th>
+                          <th className="p-3 text-left text-purple-400 font-bold">WiFi SSID</th>
                           <th className="p-3 text-left text-purple-400 font-bold">Device/OS</th>
                           <th className="p-3 text-center text-purple-400 font-bold">Status</th>
                         </tr>
@@ -416,6 +417,7 @@ export default function SOCDashboard() {
                             <td className="p-3 text-purple-300 text-xs">{login.city}, {login.country}</td>
                             <td className="p-3 text-green-400 font-mono text-xs">{login.mac_address}</td>
                             <td className="p-3 text-purple-300 text-xs">{login.hostname}</td>
+                            <td className="p-3 text-yellow-400 text-xs">{login.wifi_ssid || 'N/A'}</td>
                             <td className="p-3 text-purple-300 text-xs" title={login.user_agent}>
                               {login.device_os && login.device_os !== 'N/A' ? login.device_os : parseUserAgent(login.user_agent)}
                             </td>

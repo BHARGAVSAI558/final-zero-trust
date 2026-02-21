@@ -35,9 +35,43 @@ app.add_middleware(
 
 def get_geolocation(ip):
     if ip == "127.0.0.1" or ip == "localhost":
-        return {"country": "Unknown", "city": "Unknown", "region": "Unknown", "latitude": 0, "longitude": 0, "timezone": "Unknown", "isp": "Unknown", "ip": ip, "postal": "Unknown"}
+        # Try multiple geolocation services for localhost
+        try:
+            geo = requests.get("https://ipapi.co/json/", timeout=3).json()
+            if not geo.get('error'):
+                return {
+                    "country": geo.get("country_name", "Unknown"),
+                    "city": geo.get("city", "Unknown"),
+                    "region": geo.get("region", "Unknown"),
+                    "latitude": geo.get("latitude", 0),
+                    "longitude": geo.get("longitude", 0),
+                    "timezone": geo.get("timezone", "Unknown"),
+                    "isp": geo.get("org", "Unknown"),
+                    "ip": geo.get("ip", ip),
+                    "postal": geo.get("postal", "Unknown")
+                }
+        except:
+            pass
+        
+        try:
+            geo = requests.get("http://ip-api.com/json/", timeout=3).json()
+            if geo.get('status') == 'success':
+                return {
+                    "country": geo.get("country", "Unknown"),
+                    "city": geo.get("city", "Unknown"),
+                    "region": geo.get("regionName", "Unknown"),
+                    "latitude": geo.get("lat", 0),
+                    "longitude": geo.get("lon", 0),
+                    "timezone": geo.get("timezone", "Unknown"),
+                    "isp": geo.get("isp", "Unknown"),
+                    "ip": geo.get("query", ip),
+                    "postal": geo.get("zip", "Unknown")
+                }
+        except:
+            pass
+    
     try:
-        geo = requests.get(f"https://ipapi.co/{ip}/json/", timeout=2).json()
+        geo = requests.get(f"https://ipapi.co/{ip}/json/", timeout=3).json()
         if not geo.get('error'):
             return {
                 "country": geo.get("country_name", "Unknown"),
@@ -52,6 +86,24 @@ def get_geolocation(ip):
             }
     except:
         pass
+    
+    try:
+        geo = requests.get(f"http://ip-api.com/json/{ip}", timeout=3).json()
+        if geo.get('status') == 'success':
+            return {
+                "country": geo.get("country", "Unknown"),
+                "city": geo.get("city", "Unknown"),
+                "region": geo.get("regionName", "Unknown"),
+                "latitude": geo.get("lat", 0),
+                "longitude": geo.get("lon", 0),
+                "timezone": geo.get("timezone", "Unknown"),
+                "isp": geo.get("isp", "Unknown"),
+                "ip": geo.get("query", ip),
+                "postal": geo.get("zip", "Unknown")
+            }
+    except:
+        pass
+    
     return {"country": "Unknown", "city": "Unknown", "region": "Unknown", "latitude": 0, "longitude": 0, "timezone": "Unknown", "isp": "Unknown", "ip": ip, "postal": "Unknown"}
 
 class Blockchain:
@@ -130,9 +182,12 @@ async def login(request: Request, username: str = Form(...), password: str = For
         
         # Get real public IP
         try:
-            public_ip = requests.get('https://api.ipify.org', timeout=2).text
+            public_ip = requests.get('https://api.ipify.org', timeout=3).text
         except:
-            public_ip = request.client.host if request.client else "127.0.0.1"
+            try:
+                public_ip = requests.get('https://icanhazip.com', timeout=3).text.strip()
+            except:
+                public_ip = request.client.host if request.client else "127.0.0.1"
         
         # Use provided location or fallback to IP geolocation
         if city and country:
@@ -148,8 +203,8 @@ async def login(request: Request, username: str = Form(...), password: str = For
         else:
             geo = get_geolocation(public_ip)
         
-        cursor.execute("INSERT INTO login_logs (user_id, login_time, ip_address, success, country, city, latitude, longitude) VALUES (%s, NOW(), %s, %s, %s, %s, %s, %s)", 
-                      (username, geo["ip"], True, geo["country"], geo["city"], geo.get("latitude", 0), geo.get("longitude", 0)))
+        cursor.execute("INSERT INTO login_logs (user_id, login_time, ip_address, success, country, city, latitude, longitude, mac_address, hostname, device_os) VALUES (%s, NOW(), %s, %s, %s, %s, %s, %s, %s, %s, %s)", 
+                      (username, geo["ip"], True, geo["country"], geo["city"], geo.get("latitude", 0), geo.get("longitude", 0), "Pending", "Pending", "Pending"))
         db.commit()
         blockchain.add_transaction({"type": "LOGIN", "user": username, "success": True, "ip": geo["ip"], "location": f"{geo['city']}, {geo['country']}", "latitude": geo["latitude"], "longitude": geo["longitude"], "timestamp": str(datetime.now())})
         if len(blockchain.chain[-1]['data']) >= 3:
@@ -202,11 +257,11 @@ async def register_device(request: Request):
         # Update the most recent login with MAC address
         cursor.execute("""
             UPDATE login_logs 
-            SET mac_address = %s, hostname = %s, device_os = %s
+            SET mac_address = %s, hostname = %s, device_os = %s, wifi_ssid = %s
             WHERE user_id = %s 
             ORDER BY login_time DESC 
             LIMIT 1
-        """, (data.get("mac"), data.get("hostname"), data.get("os"), username))
+        """, (data.get("mac"), data.get("hostname"), data.get("os"), data.get("wifi_ssid"), username))
         
         db.commit()
         cursor.close()

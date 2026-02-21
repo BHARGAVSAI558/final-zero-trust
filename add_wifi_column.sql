@@ -1,0 +1,1 @@
+ALTER TABLE login_logs ADD COLUMN wifi_ssid VARCHAR(100) DEFAULT NULL;

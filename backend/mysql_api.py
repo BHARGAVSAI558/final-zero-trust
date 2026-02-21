@@ -73,7 +73,8 @@ async def get_login_history(username: str):
                    l.success, l.failure_reason, l.device_fingerprint, l.user_agent,
                    COALESCE(l.mac_address, 'N/A') as mac_address,
                    COALESCE(l.hostname, 'N/A') as hostname,
-                   COALESCE(l.device_os, 'N/A') as device_os
+                   COALESCE(l.device_os, 'N/A') as device_os,
+                   COALESCE(l.wifi_ssid, 'N/A') as wifi_ssid
             FROM login_logs l
             WHERE l.user_id = %s 
             ORDER BY l.login_time DESC 
