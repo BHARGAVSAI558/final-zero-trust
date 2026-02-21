@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import Logo from "./components/Logo";
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -20,61 +19,62 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900">
+    <div className="min-h-screen bg-gray-50" style={{fontFamily: 'Inter, system-ui, -apple-system, sans-serif'}}>
       {/* Header */}
-      <nav className="fixed w-full top-0 z-50 bg-black/80 backdrop-blur-lg border-b border-green-500/20">
+      <nav className="bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-          <Logo size="sm" />
-          <div className="flex gap-4">
-            <button onClick={() => navigate("/login")} className="px-6 py-2 border-2 border-green-500 text-green-400 rounded-lg font-mono font-bold hover:bg-green-500 hover:text-black transition">
-              LOGIN
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-semibold text-sm">
+              TC
+            </div>
+            <div>
+              <h1 className="text-xl font-semibold text-gray-900">TechCorp Portal</h1>
+              <p className="text-xs text-gray-500">Enterprise Platform</p>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <button onClick={() => navigate("/login")} className="px-6 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">
+              Login
             </button>
-            <button onClick={() => navigate("/register")} className="px-6 py-2 bg-green-500 text-black rounded-lg font-mono font-bold hover:bg-green-400 transition">
-              GET STARTED
+            <button onClick={() => navigate("/register")} className="px-6 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors">
+              Register
             </button>
           </div>
         </div>
       </nav>
 
       {/* Hero Section */}
-      <div className="pt-32 pb-20 px-6">
+      <div className="py-20 px-6 bg-gradient-to-br from-blue-50 to-indigo-50">
         <div className="max-w-7xl mx-auto text-center">
-          <div className="mb-8">
-            <Logo size="lg" />
-          </div>
-          <h1 className="text-6xl font-bold text-white mb-6 font-mono">
-            Enterprise <span className="text-green-400">Zero Trust</span> Security
+          <h1 className="text-5xl font-bold text-gray-900 mb-6">
+            Enterprise <span className="text-blue-600">Business</span> Platform
           </h1>
-          <p className="text-xl text-gray-400 mb-8 max-w-3xl mx-auto">
-            Real-time insider threat detection powered by AI-driven behavioral analytics. 
-            Protect your organization with continuous verification and micro-segmentation.
+          <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
+            Streamline your business operations with our comprehensive enterprise platform. Manage documents, projects, employees, and financial reports all in one place.
           </p>
           <div className="flex gap-4 justify-center">
-            <button onClick={() => navigate("/login")} className="px-8 py-4 bg-green-500 text-black rounded-lg font-mono font-bold text-lg hover:bg-green-400 transition shadow-lg shadow-green-500/50">
-              START MONITORING →
-            </button>
-            <button className="px-8 py-4 border-2 border-green-500 text-green-400 rounded-lg font-mono font-bold text-lg hover:bg-green-500/10 transition">
-              VIEW DEMO
+            <button onClick={() => navigate("/login")} className="px-8 py-4 bg-gray-900 text-white rounded-lg font-semibold text-lg hover:bg-gray-800 transition-colors shadow-md">
+              Access Platform →
             </button>
           </div>
         </div>
       </div>
 
-      {/* Live Stats */}
-      <div className="py-16 bg-black/50 border-y border-green-500/20">
+      {/* Stats */}
+      <div className="py-16 bg-white border-y border-gray-200">
         <div className="max-w-7xl mx-auto px-6">
           <div className="grid grid-cols-3 gap-8">
             <div className="text-center">
-              <div className="text-5xl font-bold text-green-400 mb-2 font-mono">{stats.users}+</div>
-              <div className="text-gray-400 font-mono">Active Users</div>
+              <div className="text-5xl font-bold text-gray-900 mb-2">{stats.users}</div>
+              <div className="text-gray-600">Active Users</div>
             </div>
             <div className="text-center">
-              <div className="text-5xl font-bold text-cyan-400 mb-2 font-mono">{stats.threats}</div>
-              <div className="text-gray-400 font-mono">Threats Blocked</div>
+              <div className="text-5xl font-bold text-gray-900 mb-2">{stats.threats}</div>
+              <div className="text-gray-600">Live Sessions</div>
             </div>
             <div className="text-center">
-              <div className="text-5xl font-bold text-green-400 mb-2 font-mono">{stats.uptime}</div>
-              <div className="text-gray-400 font-mono">Uptime</div>
+              <div className="text-5xl font-bold text-gray-900 mb-2">{stats.uptime}</div>
+              <div className="text-gray-600">System Uptime</div>
             </div>
           </div>
         </div>
@@ -83,22 +83,21 @@ export default function LandingPage() {
       {/* Features */}
       <div className="py-20 px-6">
         <div className="max-w-7xl mx-auto">
-          <h2 className="text-4xl font-bold text-white text-center mb-16 font-mono">
-            Enterprise-Grade <span className="text-green-400">Security Features</span>
+          <h2 className="text-4xl font-bold text-gray-900 text-center mb-16">
+            Platform <span className="text-blue-600">Features</span>
           </h2>
-          <div className="grid grid-cols-3 gap-8">
+          <div className="grid grid-cols-3 gap-6">
             {[
-              { icon: "🛡️", title: "Real-Time Monitoring", desc: "24/7 continuous surveillance with instant threat detection" },
-              { icon: "🔍", title: "Behavioral Analytics", desc: "AI-powered UEBA with 10+ anomaly detection signals" },
-              { icon: "🌐", title: "Micro-Segmentation", desc: "4-tier access control based on dynamic risk scores" },
-              { icon: "⛓️", title: "Blockchain Audit", desc: "Immutable audit trail for compliance and forensics" },
-              { icon: "📊", title: "Live Dashboards", desc: "Role-based views for Admin, HR, and Security teams" },
-              { icon: "🚨", title: "Instant Alerts", desc: "Real-time notifications for critical security events" }
+              { title: "Document Management", desc: "Secure file storage with access control and version tracking" },
+              { title: "Project Tracking", desc: "Monitor project progress, budgets, and team collaboration" },
+              { title: "Employee Directory", desc: "Centralized employee information and contact management" },
+              { title: "Financial Reports", desc: "Comprehensive financial analytics and reporting tools" },
+              { title: "Team Collaboration", desc: "Real-time collaboration tools for distributed teams" },
+              { title: "Analytics Dashboard", desc: "Business intelligence and performance metrics" }
             ].map((feature, i) => (
-              <div key={i} className="bg-gradient-to-br from-gray-800 to-gray-900 p-8 rounded-xl border-2 border-green-500/20 hover:border-green-500/50 transition">
-                <div className="text-5xl mb-4">{feature.icon}</div>
-                <h3 className="text-xl font-bold text-green-400 mb-3 font-mono">{feature.title}</h3>
-                <p className="text-gray-400">{feature.desc}</p>
+              <div key={i} className="bg-white p-6 rounded-xl border border-gray-200 shadow-md hover:shadow-xl hover:border-blue-300 transition-all duration-300">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">{feature.title}</h3>
+                <p className="text-gray-600 text-sm">{feature.desc}</p>
               </div>
             ))}
           </div>
@@ -106,24 +105,24 @@ export default function LandingPage() {
       </div>
 
       {/* CTA */}
-      <div className="py-20 px-6 bg-gradient-to-r from-green-900/20 to-cyan-900/20 border-y border-green-500/20">
+      <div className="py-20 px-6 bg-gradient-to-br from-blue-50 to-indigo-50 border-y border-gray-200">
         <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-4xl font-bold text-white mb-6 font-mono">
-            Ready to Secure Your Organization?
+          <h2 className="text-4xl font-bold text-gray-900 mb-6">
+            Transform Your Business
           </h2>
-          <p className="text-xl text-gray-400 mb-8">
-            Join leading enterprises using Zero Trust architecture to protect against insider threats.
+          <p className="text-xl text-gray-600 mb-8">
+            Join leading enterprises using our platform to streamline operations.
           </p>
-          <button onClick={() => navigate("/register")} className="px-12 py-4 bg-green-500 text-black rounded-lg font-mono font-bold text-xl hover:bg-green-400 transition shadow-lg shadow-green-500/50">
-            START FREE TRIAL →
+          <button onClick={() => navigate("/register")} className="px-12 py-4 bg-gray-900 text-white rounded-lg font-semibold text-xl hover:bg-gray-800 transition-colors shadow-lg">
+            Get Started →
           </button>
         </div>
       </div>
 
       {/* Footer */}
-      <footer className="py-8 px-6 bg-black border-t border-green-500/20">
-        <div className="max-w-7xl mx-auto text-center text-gray-500 font-mono text-sm">
-          © 2024 Zero Trust Security Platform. All rights reserved.
+      <footer className="py-8 px-6 bg-white border-t border-gray-200">
+        <div className="max-w-7xl mx-auto text-center text-gray-500 text-sm">
+          © 2024 TechCorp Portal. All rights reserved.
         </div>
       </footer>
     </div>

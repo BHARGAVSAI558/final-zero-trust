@@ -50,15 +50,51 @@ class UnifiedSOCAgent:
         threading.Thread(target=self.monitor_loop, daemon=True).start()
     
     def collect_device_info(self):
+        mem = psutil.virtual_memory()
+        disk = psutil.disk_usage('/')
+        boot = datetime.fromtimestamp(psutil.boot_time())
+        
+        # Get WiFi SSID (Windows)
+        wifi = "N/A"
+        try:
+            import subprocess
+            result = subprocess.check_output(['netsh', 'wlan', 'show', 'interfaces'], encoding='utf-8', errors='ignore')
+            for line in result.split('\n'):
+                if 'SSID' in line and 'BSSID' not in line:
+                    wifi = line.split(':')[1].strip()
+                    break
+        except:
+            pass
+        
+        # Get network adapters
+        adapters = []
+        for iface, addrs in psutil.net_if_addrs().items():
+            for addr in addrs:
+                if addr.family == 2:  # IPv4
+                    adapters.append(f"{iface}: {addr.address}")
+        
         self.device_info = {
             "username": self.username,
             "hostname": socket.gethostname(),
             "os": f"{platform.system()} {platform.release()}",
+            "os_version": platform.version(),
+            "architecture": platform.machine(),
+            "processor": platform.processor(),
             "ip": socket.gethostbyname(socket.gethostname()),
             "mac": ':'.join(['{:02x}'.format((uuid.getnode() >> i) & 0xff) for i in range(0,48,8)][::-1]),
             "device_id": hashlib.sha256(str(uuid.getnode()).encode()).hexdigest()[:16],
-            "cpu_count": psutil.cpu_count(),
-            "memory_gb": round(psutil.virtual_memory().total / (1024**3), 2)
+            "cpu_count": psutil.cpu_count(logical=False),
+            "cpu_threads": psutil.cpu_count(logical=True),
+            "cpu_freq": f"{psutil.cpu_freq().current:.0f} MHz" if psutil.cpu_freq() else "N/A",
+            "memory_total": round(mem.total / (1024**3), 2),
+            "memory_available": round(mem.available / (1024**3), 2),
+            "disk_total": round(disk.total / (1024**3), 2),
+            "disk_used": round(disk.used / (1024**3), 2),
+            "disk_free": round(disk.free / (1024**3), 2),
+            "boot_time": boot.strftime('%Y-%m-%d %H:%M:%S'),
+            "uptime": str(datetime.now() - boot).split('.')[0],
+            "wifi_ssid": wifi,
+            "network_adapters": adapters
         }
     
     def register_device(self):
@@ -107,16 +143,32 @@ class UnifiedSOCAgent:
         
         device_panel = self.create_panel(left, "💻 DEVICE FINGERPRINT")
         device_panel.pack(fill='x', pady=(0,10))
-        self.device_text = tk.Text(device_panel, height=10, font=('Courier New', 9), bg='#000000', fg='#00ff00', bd=0)
-        self.device_text.pack(padx=10, pady=10, fill='x')
-        self.device_text.insert('1.0', f"""USERNAME:  {self.device_info['username']}
-HOSTNAME:  {self.device_info['hostname']}
-OS:        {self.device_info['os']}
-IP:        {self.device_info['ip']}
-MAC:       {self.device_info['mac']}
-DEVICE ID: {self.device_info['device_id']}
-CPU CORES: {self.device_info['cpu_count']}
-MEMORY:    {self.device_info['memory_gb']} GB""")
+        self.device_text = scrolledtext.ScrolledText(device_panel, height=18, font=('Courier New', 8), bg='#000000', fg='#00ff00', bd=0, wrap='word')
+        self.device_text.pack(padx=10, pady=10, fill='both', expand=True)
+        
+        info = f"""USERNAME:     {self.device_info['username']}
+HOSTNAME:     {self.device_info['hostname']}
+OS:           {self.device_info['os']}
+VERSION:      {self.device_info['os_version']}
+ARCH:         {self.device_info['architecture']}
+PROCESSOR:    {self.device_info['processor'][:50]}
+IP ADDRESS:   {self.device_info['ip']}
+MAC ADDRESS:  {self.device_info['mac']}
+DEVICE ID:    {self.device_info['device_id']}
+CPU CORES:    {self.device_info['cpu_count']} ({self.device_info['cpu_threads']} threads)
+CPU FREQ:     {self.device_info['cpu_freq']}
+MEMORY:       {self.device_info['memory_total']} GB ({self.device_info['memory_available']} GB free)
+DISK:         {self.device_info['disk_total']} GB ({self.device_info['disk_free']} GB free)
+BOOT TIME:    {self.device_info['boot_time']}
+UPTIME:       {self.device_info['uptime']}
+WIFI SSID:    {self.device_info['wifi_ssid']}
+
+NETWORK ADAPTERS:
+"""
+        for adapter in self.device_info['network_adapters']:
+            info += f"  • {adapter}\n"
+        
+        self.device_text.insert('1.0', info)
         self.device_text.config(state='disabled')
         
         activity_panel = self.create_panel(left, "📊 LIVE ACTIVITY")
@@ -157,6 +209,32 @@ MEMORY:    {self.device_info['memory_gb']} GB""")
     def monitor_loop(self):
         while self.monitoring:
             try:
+                # Fetch risk score from backend
+                try:
+                    res = requests.get(f"{BACKEND}/security/analyze/user/{self.username}", timeout=3)
+                    if res.status_code == 200:
+                        user_data = res.json()
+                        risk_score = user_data.get('risk_score', 0)
+                        self.stat_boxes['risk'].config(text=str(risk_score))
+                        if risk_score >= 70:
+                            self.stat_boxes['risk'].config(fg='#ff0000')
+                        elif risk_score >= 50:
+                            self.stat_boxes['risk'].config(fg='#ffaa00')
+                        else:
+                            self.stat_boxes['risk'].config(fg='#00ff00')
+                except:
+                    pass
+                
+                # Fetch file logs
+                try:
+                    res = requests.get(f"{BACKEND}/files/list/{self.username}", timeout=3)
+                    if res.status_code == 200:
+                        files = res.json()
+                        self.stat_boxes['files'].config(text=str(len(files)))
+                        self.update_file_logs(files)
+                except:
+                    pass
+                
                 # Update stats
                 cpu = psutil.cpu_percent(interval=1)
                 mem = psutil.virtual_memory().percent
@@ -186,6 +264,19 @@ MEMORY:    {self.device_info['memory_gb']} GB""")
             self.activity_text.see('end')
             if int(self.activity_text.index('end-1c').split('.')[0]) > 100:
                 self.activity_text.delete('1.0', '2.0')
+        except:
+            pass
+    
+    def update_file_logs(self, files):
+        try:
+            self.files_text.delete('1.0', 'end')
+            self.files_text.insert('end', f"{'FILE':<30} {'ACTION':<10} {'TIME':<20}\n")
+            self.files_text.insert('end', "-" * 65 + "\n")
+            for f in files[:30]:
+                fname = f.get('file_name', 'N/A')[:28]
+                action = f.get('action', 'N/A')[:8]
+                ftime = f.get('access_time', 'N/A')[:18]
+                self.files_text.insert('end', f"{fname:<30} {action:<10} {ftime:<20}\n")
         except:
             pass
     

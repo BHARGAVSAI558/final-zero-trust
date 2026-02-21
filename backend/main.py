@@ -8,15 +8,11 @@ import hashlib
 import json
 from websocket_manager import manager
 from advanced_ueba import calculate_advanced_risk
-
-def get_db():
-    import mysql.connector
-    return mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="root",
-        database="zerotrust"
-    )
+from database_file_api import router as file_router
+from mysql_api import router as mysql_router
+from realtime_file_api import router as realtime_file_router
+from activity_tracker import ActivityTracker
+from mysql_database import get_db
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -24,17 +20,24 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Zero Trust Security Platform", lifespan=lifespan)
 
+app.include_router(file_router)
+app.include_router(mysql_router)
+app.include_router(realtime_file_router)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
 
 def get_geolocation(ip):
+    if ip == "127.0.0.1" or ip == "localhost":
+        return {"country": "Unknown", "city": "Unknown", "region": "Unknown", "latitude": 0, "longitude": 0, "timezone": "Unknown", "isp": "Unknown", "ip": ip, "postal": "Unknown"}
     try:
-        geo = requests.get(f"https://ipapi.co/{ip}/json/", timeout=5).json()
+        geo = requests.get(f"https://ipapi.co/{ip}/json/", timeout=2).json()
         if not geo.get('error'):
             return {
                 "country": geo.get("country_name", "Unknown"),
@@ -104,7 +107,9 @@ async def register(request: Request, username: str = Form(...), password: str = 
         return {"status": "FAIL", "error": str(e)}
 
 @app.post("/auth/login")
-async def login(request: Request, username: str = Form(...), password: str = Form(...)):
+async def login(request: Request, username: str = Form(...), password: str = Form(...), 
+                city: str = Form(None), country: str = Form(None), 
+                latitude: float = Form(None), longitude: float = Form(None)):
     try:
         db = get_db()
         cursor = db.cursor(dictionary=True)
@@ -122,9 +127,29 @@ async def login(request: Request, username: str = Form(...), password: str = For
             cursor.close()
             db.close()
             return {"status": "FAIL", "message": "Access revoked by admin"}
-        ip = request.client.host if request.client else "Unknown"
-        geo = get_geolocation(ip)
-        cursor.execute("INSERT INTO login_logs (user_id, login_time, ip_address, success, country, city) VALUES (%s, NOW(), %s, %s, %s, %s)", (username, geo["ip"], True, geo["country"], geo["city"]))
+        
+        # Get real public IP
+        try:
+            public_ip = requests.get('https://api.ipify.org', timeout=2).text
+        except:
+            public_ip = request.client.host if request.client else "127.0.0.1"
+        
+        # Use provided location or fallback to IP geolocation
+        if city and country:
+            geo = {
+                "ip": public_ip,
+                "city": city,
+                "country": country,
+                "latitude": latitude or 0,
+                "longitude": longitude or 0,
+                "timezone": "Unknown",
+                "isp": "Unknown"
+            }
+        else:
+            geo = get_geolocation(public_ip)
+        
+        cursor.execute("INSERT INTO login_logs (user_id, login_time, ip_address, success, country, city, latitude, longitude) VALUES (%s, NOW(), %s, %s, %s, %s, %s, %s)", 
+                      (username, geo["ip"], True, geo["country"], geo["city"], geo.get("latitude", 0), geo.get("longitude", 0)))
         db.commit()
         blockchain.add_transaction({"type": "LOGIN", "user": username, "success": True, "ip": geo["ip"], "location": f"{geo['city']}, {geo['country']}", "latitude": geo["latitude"], "longitude": geo["longitude"], "timestamp": str(datetime.now())})
         if len(blockchain.chain[-1]['data']) >= 3:
@@ -136,7 +161,7 @@ async def login(request: Request, username: str = Form(...), password: str = For
         risk_data = calculate_risk_score(username, db)
         cursor.close()
         db.close()
-        return {"status": "SUCCESS", "user": username, "role": user["role"], "location": f"{geo['city']}, {geo['country']}", "latitude": geo["latitude"], "longitude": geo["longitude"], "timezone": geo["timezone"], "isp": geo["isp"], "risk_score": risk_data["risk_score"], "risk_level": risk_data["risk_level"], "decision": risk_data["decision"], "access_zone": risk_data["zone"]}
+        return {"status": "SUCCESS", "user": username, "role": user["role"], "location": f"{geo['city']}, {geo['country']}", "latitude": geo["latitude"], "longitude": geo["longitude"], "timezone": geo.get("timezone", "Unknown"), "isp": geo.get("isp", "Unknown"), "risk_score": risk_data["risk_score"], "risk_level": risk_data["risk_level"], "decision": risk_data["decision"], "access_zone": risk_data["zone"]}
     except Exception as e:
         return {"status": "FAIL", "error": str(e)}
 
@@ -144,22 +169,139 @@ async def login(request: Request, username: str = Form(...), password: str = For
 def health_check():
     return {"status": "healthy", "service": "Zero Trust Platform"}
 
+@app.post("/device/register")
+async def register_device(request: Request):
+    try:
+        data = await request.json()
+        username = data.get("username")
+        db = get_db()
+        cursor = db.cursor()
+        
+        # Store device info
+        cursor.execute("""
+            INSERT INTO device_logs 
+            (user_id, device_id, mac_address, os, wifi_ssid, hostname, ip_address, trusted, first_seen, last_seen) 
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s, NOW(), NOW()) 
+            ON DUPLICATE KEY UPDATE 
+            ip_address=VALUES(ip_address), 
+            os=VALUES(os), 
+            wifi_ssid=VALUES(wifi_ssid),
+            hostname=VALUES(hostname),
+            last_seen=NOW()
+        """, (
+            username, 
+            data.get("device_id"), 
+            data.get("mac"), 
+            data.get("os"), 
+            data.get("wifi_ssid", "N/A"), 
+            data.get("hostname"), 
+            data.get("ip"), 
+            False
+        ))
+        
+        # Update the most recent login with MAC address
+        cursor.execute("""
+            UPDATE login_logs 
+            SET mac_address = %s, hostname = %s, device_os = %s
+            WHERE user_id = %s 
+            ORDER BY login_time DESC 
+            LIMIT 1
+        """, (data.get("mac"), data.get("hostname"), data.get("os"), username))
+        
+        db.commit()
+        cursor.close()
+        db.close()
+        return {"status": "SUCCESS"}
+    except Exception as e:
+        return {"status": "FAIL", "error": str(e)}
+
 @app.get("/security/analyze/admin")
 def admin_view():
+    db = None
+    cursor = None
     try:
         db = get_db()
         cursor = db.cursor(dictionary=True)
-        cursor.execute("SELECT DISTINCT l.user_id, (SELECT COUNT(*) FROM login_logs WHERE user_id=l.user_id) as total_logins, (SELECT MAX(login_time) FROM login_logs WHERE user_id=l.user_id) as last_login, (SELECT ip_address FROM login_logs WHERE user_id=l.user_id ORDER BY login_time DESC LIMIT 1) as ip_address, (SELECT country FROM login_logs WHERE user_id=l.user_id ORDER BY login_time DESC LIMIT 1) as country, (SELECT city FROM login_logs WHERE user_id=l.user_id ORDER BY login_time DESC LIMIT 1) as city, (SELECT mac_address FROM device_logs WHERE user_id=l.user_id ORDER BY first_seen DESC LIMIT 1) as mac_address, (SELECT wifi_ssid FROM device_logs WHERE user_id=l.user_id ORDER BY first_seen DESC LIMIT 1) as wifi_ssid, (SELECT hostname FROM device_logs WHERE user_id=l.user_id ORDER BY first_seen DESC LIMIT 1) as hostname, (SELECT os FROM device_logs WHERE user_id=l.user_id ORDER BY first_seen DESC LIMIT 1) as os, (SELECT status FROM users WHERE username=l.user_id) as status FROM login_logs l")
+        cursor.execute("SELECT username, status FROM users WHERE status='active'")
         users = cursor.fetchall()
         result = []
-        for u in users:
-            risk_data = calculate_risk_score(u["user_id"], db)
-            result.append({"username": u["user_id"] or "unknown", "risk_score": risk_data["risk_score"], "risk_level": risk_data["risk_level"], "decision": risk_data["decision"], "zone": risk_data["zone"], "login_count": u["total_logins"] or 0, "last_login": str(u["last_login"]) if u["last_login"] else None, "signals": risk_data["signals"], "ip_address": u["ip_address"] or "N/A", "country": u["country"] or "Unknown", "city": u["city"] or "Unknown", "mac_address": u["mac_address"] or "N/A", "wifi_ssid": u["wifi_ssid"] or "N/A", "hostname": u["hostname"] or "N/A", "os": u["os"] or "N/A", "status": u["status"] or "active"})
-        cursor.close()
-        db.close()
+        for user in users:
+            username = user["username"]
+            try:
+                cursor.execute("SELECT COUNT(*) as total FROM login_logs WHERE user_id=%s", (username,))
+                total = cursor.fetchone()["total"]
+                cursor.execute("SELECT * FROM login_logs WHERE user_id=%s ORDER BY login_time DESC LIMIT 1", (username,))
+                last_login = cursor.fetchone()
+                cursor.execute("SELECT * FROM device_logs WHERE user_id=%s ORDER BY last_seen DESC LIMIT 1", (username,))
+                device = cursor.fetchone()
+                
+                db2 = get_db()
+                risk_data = calculate_risk_score(username, db2)
+                db2.close()
+                
+                ip_addr = "127.0.0.1"
+                country = "India"
+                city = "Sivarampuram"
+                mac_addr = "Browser-Based"
+                hostname_val = "Web-Client"
+                os_val = "Windows 10"
+                
+                if last_login:
+                    ip_addr = last_login.get("ip_address", "127.0.0.1")
+                    country = last_login.get("country", "India")
+                    city = last_login.get("city", "Sivarampuram")
+                    if last_login.get("mac_address") and last_login.get("mac_address") != "Browser-Based":
+                        mac_addr = last_login.get("mac_address")
+                    if last_login.get("hostname") and last_login.get("hostname") != "Web-Client":
+                        hostname_val = last_login.get("hostname")
+                    if last_login.get("device_os"):
+                        os_val = last_login.get("device_os")
+                
+                if device:
+                    if mac_addr == "Browser-Based" and device.get("mac_address"):
+                        mac_addr = device.get("mac_address")
+                    if hostname_val == "Web-Client" and device.get("hostname"):
+                        hostname_val = device.get("hostname")
+                    if os_val == "Windows 10" and device.get("os"):
+                        os_val = device.get("os")
+                
+                result.append({
+                    "username": username,
+                    "risk_score": risk_data["risk_score"],
+                    "risk_level": risk_data["risk_level"],
+                    "decision": risk_data["decision"],
+                    "zone": risk_data["zone"],
+                    "signals": risk_data["signals"],
+                    "login_count": total,
+                    "last_login": str(last_login["login_time"]) if last_login else None,
+                    "ip_address": ip_addr,
+                    "country": country,
+                    "city": city,
+                    "mac_address": mac_addr,
+                    "wifi_ssid": device["wifi_ssid"] if device else "N/A",
+                    "hostname": hostname_val,
+                    "os": os_val,
+                    "device_id": device["device_id"] if device else "Browser",
+                    "status": user["status"]
+                })
+            except Exception as e:
+                print(f"Error processing user {username}: {e}")
+                import traceback
+                traceback.print_exc()
+                continue
+        if cursor:
+            cursor.close()
+        if db:
+            db.close()
         return {"users": result}
     except Exception as e:
         print(f"Admin view error: {e}")
+        import traceback
+        traceback.print_exc()
+        if cursor:
+            cursor.close()
+        if db:
+            db.close()
         return {"users": []}
 
 @app.get("/security/analyze/user/{username}")
@@ -189,9 +331,45 @@ def get_pending_users():
         users = cursor.fetchall()
         cursor.close()
         db.close()
-        return [{"username": u["username"], "created_at": str(u["created_at"])} for u in users]
+        return {"pending_users": [{"username": u["username"], "created_at": str(u["created_at"])} for u in users]}
     except:
-        return []
+        return {"pending_users": []}
+
+@app.post("/admin/approve-user")
+async def approve_user(username: str = Form(...), admin: str = Form(...), action: str = Form(...)):
+    try:
+        db = get_db()
+        cursor = db.cursor()
+        if action == 'approve':
+            cursor.execute("UPDATE users SET status='active' WHERE username=%s", (username,))
+            db.commit()
+            blockchain.add_transaction({"type": "USER_APPROVED", "user": username, "admin": admin, "timestamp": str(datetime.now())})
+            cursor.close()
+            db.close()
+            return {"status": "SUCCESS", "message": f"User {username} approved"}
+        else:
+            cursor.execute("DELETE FROM users WHERE username=%s", (username,))
+            db.commit()
+            blockchain.add_transaction({"type": "USER_REJECTED", "user": username, "admin": admin, "timestamp": str(datetime.now())})
+            cursor.close()
+            db.close()
+            return {"status": "SUCCESS", "message": f"User {username} rejected"}
+    except Exception as e:
+        return {"status": "FAIL", "error": str(e)}
+
+@app.post("/admin/revoke-access")
+async def revoke_access(username: str = Form(...), admin: str = Form(...)):
+    try:
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute("UPDATE users SET status='revoked' WHERE username=%s", (username,))
+        db.commit()
+        blockchain.add_transaction({"type": "ACCESS_REVOKED", "user": username, "admin": admin, "timestamp": str(datetime.now())})
+        cursor.close()
+        db.close()
+        return {"status": "SUCCESS", "message": f"Access revoked for {username}"}
+    except Exception as e:
+        return {"status": "FAIL", "error": str(e)}
 
 @app.get("/admin/file-access")
 def admin_files():
@@ -205,6 +383,19 @@ def admin_files():
         return {"file_logs": [{"user_id": f["user_id"], "file_name": f["file_name"], "action": f["action"], "access_time": str(f["access_time"]), "ip_address": f["ip_address"]} for f in files]}
     except:
         return {"file_logs": []}
+
+@app.get("/admin/network-activity")
+def admin_network():
+    try:
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM network_logs ORDER BY timestamp DESC LIMIT 100")
+        network = cursor.fetchall()
+        cursor.close()
+        db.close()
+        return {"network_logs": [{"user_id": n["user_id"], "connection_type": n["connection_type"], "remote_ip": n["remote_ip"], "remote_port": n["remote_port"], "protocol": n["protocol"], "external": n["external"], "timestamp": str(n["timestamp"])} for n in network]}
+    except:
+        return {"network_logs": []}
 
 @app.get("/audit/chain")
 def audit():
@@ -276,14 +467,79 @@ async def agent_telemetry(request: Request):
         data = await request.json()
         username = data.get("username")
         device = data.get("device", {})
+        files = data.get("files", [])
+        network = data.get("network", [])
+        
         db = get_db()
         cursor = db.cursor()
-        cursor.execute("INSERT INTO device_logs (user_id, device_id, mac_address, os, wifi_ssid, hostname, ip_address, trusted, first_seen) VALUES (%s,%s,%s,%s,%s,%s,%s,%s, NOW()) ON DUPLICATE KEY UPDATE ip_address=VALUES(ip_address), first_seen=NOW()", (username, device.get("device_id"), device.get("mac"), device.get("os"), device.get("wifi", "N/A"), device.get("hostname"), device.get("ip"), False))
+        
+        # Store comprehensive device info
+        cursor.execute("""
+            INSERT INTO device_logs 
+            (user_id, device_id, mac_address, os, os_version, wifi_ssid, hostname, ip_address, trusted, first_seen, last_seen) 
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s, NOW(), NOW()) 
+            ON DUPLICATE KEY UPDATE 
+            ip_address=VALUES(ip_address), 
+            os=VALUES(os), 
+            os_version=VALUES(os_version),
+            wifi_ssid=VALUES(wifi_ssid),
+            hostname=VALUES(hostname),
+            last_seen=NOW()
+        """, (
+            username, 
+            device.get("device_id"), 
+            device.get("mac"), 
+            device.get("os"), 
+            device.get("os_version"),
+            device.get("wifi", "N/A"), 
+            device.get("hostname"), 
+            device.get("ip"), 
+            False
+        ))
+        
+        # Store file access logs with full details
+        for file in files:
+            cursor.execute("""
+                INSERT INTO file_access_logs 
+                (user_id, file_name, file_path, action, sensitivity_level, ip_address, access_time, device_id) 
+                VALUES (%s,%s,%s,%s,%s,%s, NOW(),%s)
+            """, (
+                username, 
+                file.get("name"), 
+                file.get("path"),
+                file.get("action", "READ").upper(),
+                file.get("sensitivity", "internal"),
+                device.get("ip", "Unknown"),
+                device.get("device_id")
+            ))
+        
+        # Store network connections
+        for conn in network:
+            cursor.execute("""
+                INSERT INTO network_logs 
+                (user_id, connection_type, remote_ip, remote_port, protocol, external, timestamp) 
+                VALUES (%s,%s,%s,%s,%s,%s, NOW())
+            """, (
+                username, 
+                conn.get("type"), 
+                conn.get("ip"), 
+                conn.get("port"), 
+                conn.get("protocol"), 
+                conn.get("external", False)
+            ))
+        
         db.commit()
         cursor.close()
         db.close()
-        return {"status": "SUCCESS"}
+        
+        return {
+            "status": "SUCCESS", 
+            "files_logged": len(files), 
+            "network_logged": len(network),
+            "device_updated": True
+        }
     except Exception as e:
+        print(f"Telemetry error: {e}")
         return {"status": "FAIL", "error": str(e)}
 
 @app.get("/realtime/stats")

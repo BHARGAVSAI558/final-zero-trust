@@ -1,8 +1,10 @@
-import psycopg2
-import psycopg2.extras
-import os
+import mysql.connector
 
 def get_db():
-    return psycopg2.connect(
-        os.getenv("DATABASE_URL", "postgresql://zero_user:password@localhost/zero")
+    return mysql.connector.connect(
+        host="localhost",
+        user="root",
+        password="root",
+        database="zerotrust",
+        autocommit=False
     )

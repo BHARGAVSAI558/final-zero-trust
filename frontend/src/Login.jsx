@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Logo from "./components/Logo";
 
@@ -7,6 +7,74 @@ function Login({ setIsAuthenticated }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [geoLocation, setGeoLocation] = useState(null);
+
+  // Request location permission on component mount - FORCE IT
+  useEffect(() => {
+    const getLocation = async () => {
+      // Try GPS first
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            console.log('GPS location obtained');
+            // Reverse geocode to get city name
+            try {
+              const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${position.coords.latitude}&lon=${position.coords.longitude}&format=json`);
+              const data = await res.json();
+              setGeoLocation({
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+                accuracy: position.coords.accuracy,
+                city: data.address?.city || data.address?.town || data.address?.village || 'Unknown',
+                country: data.address?.country || 'Unknown'
+              });
+              console.log('Location:', data.address?.city, data.address?.country);
+            } catch (err) {
+              setGeoLocation({
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+                accuracy: position.coords.accuracy
+              });
+            }
+          },
+          async (error) => {
+            console.log('GPS failed, using IP location');
+            // Immediately use IP location
+            try {
+              const res = await fetch('https://ipapi.co/json/');
+              const data = await res.json();
+              setGeoLocation({
+                latitude: data.latitude,
+                longitude: data.longitude,
+                accuracy: 5000,
+                city: data.city,
+                country: data.country_name
+              });
+            } catch (err) {
+              console.error('IP location failed');
+            }
+          },
+          { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        );
+      } else {
+        // No GPS support, use IP immediately
+        try {
+          const res = await fetch('https://ipapi.co/json/');
+          const data = await res.json();
+          setGeoLocation({
+            latitude: data.latitude,
+            longitude: data.longitude,
+            accuracy: 5000,
+            city: data.city,
+            country: data.country_name
+          });
+        } catch (err) {
+          console.error('No location available');
+        }
+      }
+    };
+    getLocation();
+  }, []);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -16,21 +84,87 @@ function Login({ setIsAuthenticated }) {
       const formData = new FormData();
       formData.append('username', username);
       formData.append('password', password);
+      
+      // ALWAYS get fresh location on login
+      let loginLat = null, loginLon = null;
+      
+      if (geoLocation) {
+        loginLat = geoLocation.latitude;
+        loginLon = geoLocation.longitude;
+      } else {
+        // Force get location NOW
+        try {
+          const ipRes = await fetch('https://ipapi.co/json/');
+          const ipData = await ipRes.json();
+          loginLat = ipData.latitude;
+          loginLon = ipData.longitude;
+        } catch (err) {
+          console.error('Location fetch failed');
+        }
+      }
+      
+      if (loginLat && loginLon) {
+        formData.append('latitude', loginLat);
+        formData.append('longitude', loginLon);
+        if (geoLocation?.city) formData.append('city', geoLocation.city);
+        if (geoLocation?.country) formData.append('country', geoLocation.country);
+      }
 
       const res = await fetch(`http://localhost:8000/auth/login`, { method: "POST", body: formData });
       const data = await res.json();
+      
+      console.log("Login response:", data);
 
       if (data.status !== "SUCCESS") {
-        setError("ACCESS DENIED - INVALID CREDENTIALS");
+        setError(data.message || "ACCESS DENIED - INVALID CREDENTIALS");
         return;
       }
 
+      // Success - clear everything and redirect
+      setError("");
       localStorage.setItem("user", data.user);
       localStorage.setItem("username", data.user);
       localStorage.setItem("role", data.role);
+      localStorage.setItem("isAuthenticated", "true");
       setIsAuthenticated(true);
+      
+      // Send device fingerprint to backend
+      try {
+        const deviceData = {
+          username: data.user,
+          device_id: `${navigator.userAgent}-${navigator.platform}`,
+          mac: 'Browser-Based',
+          os: `${navigator.platform} (${navigator.userAgent.match(/\(([^)]+)\)/)?.[1] || 'Unknown'})`,
+          wifi_ssid: 'N/A',
+          hostname: 'Web-Client',
+          ip: '127.0.0.1'
+        };
+        await fetch('http://localhost:8000/device/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(deviceData)
+        });
+        console.log('Device registered:', deviceData);
+      } catch (err) {
+        console.log('Device registration failed:', err);
+      }
+      
+      // Trigger agent to capture real device data
+      try {
+        await fetch('http://localhost:9999', {
+          method: 'POST',
+          body: `LOGIN:${data.user}`,
+          mode: 'no-cors'
+        });
+        console.log('Agent triggered for real device capture');
+      } catch (err) {
+        console.log('Agent not running - using browser fingerprint only');
+      }
+      
+      console.log("Redirecting to dashboard...");
       navigate("/dashboard");
     } catch (err) {
+      console.error("Login error:", err);
       setError("CONNECTION ERROR - CHECK BACKEND");
     }
   };

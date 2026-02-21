@@ -1,0 +1,3 @@
+USE zerotrust;
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS risk_score INT DEFAULT 0;

@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta
-import psycopg2.extras
 
 def calculate_advanced_risk(username, db):
     cursor = db.cursor(dictionary=True)
@@ -7,17 +6,20 @@ def calculate_advanced_risk(username, db):
     signals = []
     
     cursor.execute("SELECT COUNT(*) as c FROM login_logs WHERE user_id=%s AND (HOUR(login_time) >= 20 OR HOUR(login_time) < 6) AND login_time > DATE_SUB(NOW(), INTERVAL 24 HOUR)", (username,))
-    if (c := cursor.fetchone()['c']) > 0:
+    c = cursor.fetchone()['c']
+    if c > 0:
         risk += c * 8
         signals.append(f"ODD_HOUR_LOGIN({c})")
     
     cursor.execute("SELECT COUNT(*) as c FROM login_logs WHERE user_id=%s AND success=0 AND login_time > DATE_SUB(NOW(), INTERVAL 1 HOUR)", (username,))
-    if (c := cursor.fetchone()['c']) > 3:
+    c = cursor.fetchone()['c']
+    if c > 3:
         risk += 20
         signals.append(f"FAILED_LOGIN({c})")
     
     cursor.execute("SELECT COUNT(DISTINCT ip_address) as c FROM login_logs WHERE user_id=%s AND login_time > DATE_SUB(NOW(), INTERVAL 2 HOUR)", (username,))
-    if (c := cursor.fetchone()['c']) > 2:
+    c = cursor.fetchone()['c']
+    if c > 2:
         risk += 15
         signals.append(f"MULTIPLE_IPS({c})")
     
