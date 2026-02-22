@@ -1,11 +1,12 @@
-import mysql.connector
+import psycopg2
+import psycopg2.extras
 import os
 
 def get_db():
-    return mysql.connector.connect(
-        host=os.getenv("MYSQL_HOST", "localhost"),
-        user=os.getenv("MYSQL_USER", "root"),
-        password=os.getenv("MYSQL_PASSWORD", "root"),
-        database=os.getenv("MYSQL_DATABASE", "zerotrust"),
-        autocommit=False
+    return psycopg2.connect(
+        host=os.getenv("DB_HOST", "localhost"),
+        user=os.getenv("DB_USER", "postgres"),
+        password=os.getenv("DB_PASSWORD", ""),
+        database=os.getenv("DB_NAME", "postgres"),
+        port=os.getenv("DB_PORT", "5432")
     )

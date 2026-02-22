@@ -6,6 +6,7 @@ import os
 import requests
 import hashlib
 import json
+import psycopg2.extras
 from websocket_manager import manager
 from advanced_ueba import calculate_advanced_risk
 from database_file_api import router as file_router
@@ -164,7 +165,7 @@ async def login(request: Request, username: str = Form(...), password: str = For
                 latitude: float = Form(None), longitude: float = Form(None)):
     try:
         db = get_db()
-        cursor = db.cursor(dictionary=True)
+        cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute("SELECT * FROM users WHERE username=%s AND password=%s", (username, password))
         user = cursor.fetchone()
         if not user:
@@ -231,10 +232,10 @@ def init_database():
         db = get_db()
         cursor = db.cursor()
         
-        # Create tables
+        # Create tables (PostgreSQL syntax)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
-                id INT AUTO_INCREMENT PRIMARY KEY,
+                id SERIAL PRIMARY KEY,
                 username VARCHAR(50) UNIQUE NOT NULL,
                 password VARCHAR(255) NOT NULL,
                 role VARCHAR(20) DEFAULT 'user',
@@ -245,7 +246,7 @@ def init_database():
         
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS login_logs (
-                id INT AUTO_INCREMENT PRIMARY KEY,
+                id SERIAL PRIMARY KEY,
                 user_id VARCHAR(50) NOT NULL,
                 login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 ip_address VARCHAR(50),
@@ -263,7 +264,7 @@ def init_database():
         
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS device_logs (
-                id INT AUTO_INCREMENT PRIMARY KEY,
+                id SERIAL PRIMARY KEY,
                 user_id VARCHAR(50) NOT NULL,
                 device_id VARCHAR(100),
                 mac_address VARCHAR(50),
@@ -274,14 +275,14 @@ def init_database():
                 ip_address VARCHAR(50),
                 trusted BOOLEAN DEFAULT FALSE,
                 first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                UNIQUE KEY unique_device (user_id, device_id)
+                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (user_id, device_id)
             )
         """)
         
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS file_access_logs (
-                id INT AUTO_INCREMENT PRIMARY KEY,
+                id SERIAL PRIMARY KEY,
                 user_id VARCHAR(50) NOT NULL,
                 file_name VARCHAR(255) NOT NULL,
                 file_path TEXT,
@@ -295,7 +296,7 @@ def init_database():
         
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS network_logs (
-                id INT AUTO_INCREMENT PRIMARY KEY,
+                id SERIAL PRIMARY KEY,
                 user_id VARCHAR(50) NOT NULL,
                 connection_type VARCHAR(100),
                 remote_ip VARCHAR(50),
