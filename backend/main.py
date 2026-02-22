@@ -224,6 +224,109 @@ async def login(request: Request, username: str = Form(...), password: str = For
 def health_check():
     return {"status": "healthy", "service": "Zero Trust Platform"}
 
+@app.get("/init-database")
+def init_database():
+    """Initialize database with tables and admin user - Call this once after deployment"""
+    try:
+        db = get_db()
+        cursor = db.cursor()
+        
+        # Create tables
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) UNIQUE NOT NULL,
+                password VARCHAR(255) NOT NULL,
+                role VARCHAR(20) DEFAULT 'user',
+                status VARCHAR(20) DEFAULT 'pending',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS login_logs (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id VARCHAR(50) NOT NULL,
+                login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                ip_address VARCHAR(50),
+                success BOOLEAN DEFAULT TRUE,
+                country VARCHAR(100),
+                city VARCHAR(100),
+                latitude DECIMAL(10, 8),
+                longitude DECIMAL(11, 8),
+                mac_address VARCHAR(50) DEFAULT 'Pending',
+                hostname VARCHAR(100) DEFAULT 'Pending',
+                device_os VARCHAR(100) DEFAULT 'Pending',
+                wifi_ssid VARCHAR(100) DEFAULT 'N/A'
+            )
+        """)
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS device_logs (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id VARCHAR(50) NOT NULL,
+                device_id VARCHAR(100),
+                mac_address VARCHAR(50),
+                os VARCHAR(100),
+                os_version VARCHAR(50),
+                wifi_ssid VARCHAR(100),
+                hostname VARCHAR(100),
+                ip_address VARCHAR(50),
+                trusted BOOLEAN DEFAULT FALSE,
+                first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_device (user_id, device_id)
+            )
+        """)
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS file_access_logs (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id VARCHAR(50) NOT NULL,
+                file_name VARCHAR(255) NOT NULL,
+                file_path TEXT,
+                action VARCHAR(50) NOT NULL,
+                sensitivity_level VARCHAR(50) DEFAULT 'internal',
+                ip_address VARCHAR(50),
+                access_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                device_id VARCHAR(100)
+            )
+        """)
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS network_logs (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id VARCHAR(50) NOT NULL,
+                connection_type VARCHAR(100),
+                remote_ip VARCHAR(50),
+                remote_port INT,
+                protocol VARCHAR(20),
+                external BOOLEAN DEFAULT FALSE,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Insert admin user if not exists
+        cursor.execute("SELECT * FROM users WHERE username='admin'")
+        if not cursor.fetchone():
+            cursor.execute(
+                "INSERT INTO users (username, password, role, status) VALUES (%s, %s, %s, %s)",
+                ('admin', 'admin123', 'admin', 'active')
+            )
+        
+        db.commit()
+        cursor.close()
+        db.close()
+        
+        return {
+            "status": "SUCCESS",
+            "message": "Database initialized successfully",
+            "tables_created": ["users", "login_logs", "device_logs", "file_access_logs", "network_logs"],
+            "admin_user": "admin / admin123"
+        }
+    except Exception as e:
+        return {"status": "FAIL", "error": str(e)}
+
 @app.post("/device/register")
 async def register_device(request: Request):
     try:
