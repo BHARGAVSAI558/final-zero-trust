@@ -9,71 +9,37 @@ function Login({ setIsAuthenticated }) {
   const [error, setError] = useState("");
   const [geoLocation, setGeoLocation] = useState(null);
 
-  // Request location permission on component mount - FORCE IT
+  // Request GPS location permission immediately on page load
   useEffect(() => {
-    const getLocation = async () => {
-      // Try GPS first
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          async (position) => {
-            console.log('GPS location obtained');
-            // Reverse geocode to get city name
-            try {
-              const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${position.coords.latitude}&lon=${position.coords.longitude}&format=json`);
-              const data = await res.json();
-              setGeoLocation({
-                latitude: position.coords.latitude,
-                longitude: position.coords.longitude,
-                accuracy: position.coords.accuracy,
-                city: data.address?.city || data.address?.town || data.address?.village || 'Unknown',
-                country: data.address?.country || 'Unknown'
-              });
-              console.log('Location:', data.address?.city, data.address?.country);
-            } catch (err) {
-              setGeoLocation({
-                latitude: position.coords.latitude,
-                longitude: position.coords.longitude,
-                accuracy: position.coords.accuracy
-              });
-            }
-          },
-          async (error) => {
-            console.log('GPS failed, using IP location');
-            // Immediately use IP location
-            try {
-              const res = await fetch('https://ipapi.co/json/');
-              const data = await res.json();
-              setGeoLocation({
-                latitude: data.latitude,
-                longitude: data.longitude,
-                accuracy: 5000,
-                city: data.city,
-                country: data.country_name
-              });
-            } catch (err) {
-              console.error('IP location failed');
-            }
-          },
-          { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-        );
-      } else {
-        // No GPS support, use IP immediately
-        try {
-          const res = await fetch('https://ipapi.co/json/');
-          const data = await res.json();
-          setGeoLocation({
-            latitude: data.latitude,
-            longitude: data.longitude,
-            accuracy: 5000,
-            city: data.city,
-            country: data.country_name
-          });
-        } catch (err) {
-          console.error('No location available');
-        }
-      }
-    };
-    getLocation();
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          console.log('✓ GPS location obtained');
+          try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${position.coords.latitude}&lon=${position.coords.longitude}&format=json`);
+            const data = await res.json();
+            setGeoLocation({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              accuracy: position.coords.accuracy,
+              city: data.address?.city || data.address?.town || data.address?.village || 'Unknown',
+              country: data.address?.country || 'Unknown'
+            });
+            console.log('✓ Exact location:', data.address?.city, data.address?.country);
+          } catch (err) {
+            setGeoLocation({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              accuracy: position.coords.accuracy
+            });
+          }
+        },
+        (error) => {
+          console.log('✗ GPS denied or unavailable');
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    }
   }, []);
 
   const handleLogin = async (e) => {
@@ -85,22 +51,13 @@ function Login({ setIsAuthenticated }) {
       formData.append('username', username);
       formData.append('password', password);
       
-      // ALWAYS get fresh location on login
-      let loginLat = null, loginLon = null;
+      // Get fresh GPS location on login
+      let loginLat = geoLocation?.latitude;
+      let loginLon = geoLocation?.longitude;
       
-      if (geoLocation) {
-        loginLat = geoLocation.latitude;
-        loginLon = geoLocation.longitude;
-      } else {
-        // Force get location NOW
-        try {
-          const ipRes = await fetch('https://ipapi.co/json/');
-          const ipData = await ipRes.json();
-          loginLat = ipData.latitude;
-          loginLon = ipData.longitude;
-        } catch (err) {
-          console.error('Location fetch failed');
-        }
+      if (!loginLat || !loginLon) {
+        setError('LOCATION ACCESS REQUIRED');
+        return;
       }
       
       if (loginLat && loginLon) {
