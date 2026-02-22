@@ -5,6 +5,48 @@ def calculate_advanced_risk(username, db):
     risk = 0
     signals = []
     
+    # Critical file READ (low risk)
+    cursor.execute("SELECT COUNT(*) as c FROM file_access_logs WHERE user_id=%s AND (file_name LIKE %s OR file_name LIKE %s OR file_name LIKE %s) AND action='READ' AND access_time > DATE_SUB(NOW(), INTERVAL 24 HOUR)", (username, '%secret%', '%credential%', '%salary%'))
+    c = cursor.fetchone()['c']
+    if c > 0:
+        risk += c * 5
+        signals.append(f"CRITICAL_FILE_READ({c})")
+    
+    # Critical file EDIT (very high risk - most dangerous)
+    cursor.execute("SELECT COUNT(*) as c FROM file_access_logs WHERE user_id=%s AND (file_name LIKE %s OR file_name LIKE %s OR file_name LIKE %s) AND action='WRITE' AND access_time > DATE_SUB(NOW(), INTERVAL 24 HOUR)", (username, '%secret%', '%credential%', '%salary%'))
+    c = cursor.fetchone()['c']
+    if c > 0:
+        risk += c * 20
+        signals.append(f"CRITICAL_FILE_EDIT({c})")
+    
+    # Critical file DOWNLOAD (high risk)
+    cursor.execute("SELECT COUNT(*) as c FROM file_access_logs WHERE user_id=%s AND (file_name LIKE %s OR file_name LIKE %s OR file_name LIKE %s) AND action='DOWNLOAD' AND access_time > DATE_SUB(NOW(), INTERVAL 24 HOUR)", (username, '%secret%', '%credential%', '%salary%'))
+    c = cursor.fetchone()['c']
+    if c > 0:
+        risk += c * 12
+        signals.append(f"CRITICAL_FILE_DOWNLOAD({c})")
+    
+    # Any file deletion (high risk)
+    cursor.execute("SELECT COUNT(*) as c FROM file_access_logs WHERE user_id=%s AND action='DELETE' AND access_time > DATE_SUB(NOW(), INTERVAL 24 HOUR)", (username,))
+    c = cursor.fetchone()['c']
+    if c > 0:
+        risk += c * 15
+        signals.append(f"FILE_DELETION({c})")
+    
+    # Regular file editing (low-medium risk)
+    cursor.execute("SELECT COUNT(*) as c FROM file_access_logs WHERE user_id=%s AND action='WRITE' AND access_time > DATE_SUB(NOW(), INTERVAL 24 HOUR)", (username,))
+    c = cursor.fetchone()['c']
+    if c > 1:
+        risk += c * 3
+        signals.append(f"FILE_EDIT({c})")
+    
+    # Regular file download (low risk)
+    cursor.execute("SELECT COUNT(*) as c FROM file_access_logs WHERE user_id=%s AND action='DOWNLOAD' AND access_time > DATE_SUB(NOW(), INTERVAL 24 HOUR)", (username,))
+    c = cursor.fetchone()['c']
+    if c > 3:
+        risk += c * 2
+        signals.append(f"FILE_DOWNLOAD({c})")
+    
     cursor.execute("SELECT COUNT(*) as c FROM login_logs WHERE user_id=%s AND (HOUR(login_time) >= 20 OR HOUR(login_time) < 6) AND login_time > DATE_SUB(NOW(), INTERVAL 24 HOUR)", (username,))
     c = cursor.fetchone()['c']
     if c > 0:

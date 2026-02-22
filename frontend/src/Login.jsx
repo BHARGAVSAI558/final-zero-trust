@@ -55,9 +55,9 @@ function Login({ setIsAuthenticated }) {
       let loginLat = geoLocation?.latitude;
       let loginLon = geoLocation?.longitude;
       
+      // If no GPS, allow login anyway (backend will use IP location)
       if (!loginLat || !loginLon) {
-        setError('LOCATION ACCESS REQUIRED');
-        return;
+        console.log('No GPS location, using IP fallback');
       }
       
       if (loginLat && loginLon) {

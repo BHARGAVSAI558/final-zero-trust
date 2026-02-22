@@ -254,11 +254,12 @@ async def register_device(request: Request):
             False
         ))
         
-        # Update the most recent login with MAC address
+        # Update ONLY the most recent login that still has "Pending" values
         cursor.execute("""
             UPDATE login_logs 
             SET mac_address = %s, hostname = %s, device_os = %s, wifi_ssid = %s
             WHERE user_id = %s 
+            AND mac_address = 'Pending'
             ORDER BY login_time DESC 
             LIMIT 1
         """, (data.get("mac"), data.get("hostname"), data.get("os"), data.get("wifi_ssid"), username))
@@ -444,12 +445,28 @@ def admin_network():
     try:
         db = get_db()
         cursor = db.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM network_logs ORDER BY timestamp DESC LIMIT 100")
+        cursor.execute("""
+            SELECT user_id, connection_type, remote_ip, remote_port, protocol, 
+                   MIN(timestamp) as first_seen, MAX(timestamp) as last_seen, COUNT(*) as count
+            FROM network_logs 
+            WHERE timestamp > DATE_SUB(NOW(), INTERVAL 1 HOUR)
+            GROUP BY user_id, remote_ip, remote_port, protocol
+            ORDER BY last_seen DESC 
+            LIMIT 50
+        """)
         network = cursor.fetchall()
         cursor.close()
         db.close()
-        return {"network_logs": [{"user_id": n["user_id"], "connection_type": n["connection_type"], "remote_ip": n["remote_ip"], "remote_port": n["remote_port"], "protocol": n["protocol"], "external": n["external"], "timestamp": str(n["timestamp"])} for n in network]}
-    except:
+        return {"network_logs": [{
+            "user_id": n["user_id"], 
+            "connection": n["connection_type"], 
+            "destination": f"{n['remote_ip']}:{n['remote_port']}",
+            "protocol": n["protocol"],
+            "port": n["remote_port"],
+            "timestamp": f"{n['first_seen'].strftime('%I:%M:%S %p')} - {n['last_seen'].strftime('%I:%M:%S %p')}" if n['count'] > 1 else n['last_seen'].strftime('%m/%d/%Y, %I:%M:%S %p')
+        } for n in network]}
+    except Exception as e:
+        print(f"Network activity error: {e}")
         return {"network_logs": []}
 
 @app.get("/audit/chain")
@@ -476,6 +493,45 @@ async def file_access(request: Request):
         db.close()
         return {"status": "SUCCESS", "timestamp": datetime.now().isoformat()}
     except Exception as e:
+        return {"status": "FAIL", "error": str(e)}
+
+@app.post("/track/network/batch")
+async def track_network_batch(request: Request):
+    try:
+        data = await request.json()
+        connections = data.get('connections', [])
+        if not connections:
+            return {"status": "SUCCESS", "count": 0}
+        
+        db = get_db()
+        cursor = db.cursor()
+        
+        for conn in connections:
+            cursor.execute("INSERT INTO network_logs (user_id, connection_type, remote_ip, remote_port, protocol, external, timestamp) VALUES (%s,%s,%s,%s,%s,%s, NOW())", 
+                          (conn.get("username"), conn.get("domain", "External"), conn.get("remote_ip"), conn.get("remote_port"), conn.get("protocol"), conn.get("is_external", True)))
+        
+        db.commit()
+        cursor.close()
+        db.close()
+        return {"status": "SUCCESS", "count": len(connections)}
+    except Exception as e:
+        print(f"Network batch error: {e}")
+        return {"status": "FAIL", "error": str(e)}
+
+@app.post("/track/network")
+async def track_network(request: Request):
+    try:
+        data = await request.json()
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute("INSERT INTO network_logs (user_id, connection_type, remote_ip, remote_port, protocol, external, timestamp) VALUES (%s,%s,%s,%s,%s,%s, NOW())", 
+                      (data.get("username"), "External", data.get("remote_ip"), data.get("remote_port"), data.get("protocol"), data.get("is_external", True)))
+        db.commit()
+        cursor.close()
+        db.close()
+        return {"status": "SUCCESS"}
+    except Exception as e:
+        print(f"Network track error: {e}")
         return {"status": "FAIL", "error": str(e)}
 
 @app.get("/files/list/{username}")
